@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: bovigestor-backend
+  datasource:
+    url: ${BOVIGESTOR_DB_URL:jdbc:postgresql://localhost:5432/bovigestor}
+    username: ${BOVIGESTOR_DB_USERNAME:}
+    password: ${BOVIGESTOR_DB_PASSWORD:}
+  flyway:
+    enabled: true
