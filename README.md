@@ -16,7 +16,7 @@ Backend educacional independente do BoviGestor, criado para apoiar o desenvolvim
 ## Pré-requisitos
 
 - JDK 25 instalado e selecionado para a sessão de terminal.
-- PostgreSQL apenas para iniciar a aplicação fora do perfil de teste.
+- PostgreSQL para executar a aplicação pelo perfil `dev`.
 
 ## Compilar
 
@@ -34,18 +34,24 @@ No diretório `backend`:
 
 Os testes usam o perfil `test`, que desativa a autoconfiguração de DataSource, JPA e Flyway. Isso evita a necessidade de PostgreSQL durante esta etapa e não o substitui por H2.
 
-## Iniciar com PostgreSQL
+## Iniciar com PostgreSQL no perfil `dev`
 
 Após criar e configurar um banco PostgreSQL, defina as variáveis de ambiente da sessão:
 
 ```powershell
-$env:BOVIGESTOR_DB_URL = "jdbc:postgresql://localhost:5432/bovigestor"
-$env:BOVIGESTOR_DB_USERNAME = "seu_usuario"
-$env:BOVIGESTOR_DB_PASSWORD = "sua_senha"
+$env:BOVIGESTOR_DB_URL = "jdbc:postgresql://localhost:5433/bovigestor"
+$env:BOVIGESTOR_DB_USERNAME = "bovigestor"
+$securePassword = Read-Host "Senha do banco de dados" -AsSecureString
+$env:BOVIGESTOR_DB_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
+$env:SPRING_PROFILES_ACTIVE = "dev"
 .\mvnw.cmd spring-boot:run
 ```
 
-As credenciais não devem ser adicionadas ao repositório. O arquivo `application.yml` possui somente referências a variáveis de ambiente.
+No IntelliJ, abra a configuração de execução da aplicação e adicione `dev` em **Active profiles** (ou `-Dspring.profiles.active=dev` em **VM options**). O perfil `dev` usa exclusivamente PostgreSQL e mantém Flyway ativo.
+
+O perfil `dev` também registra as instruções SQL e seus valores de parâmetros no console. No scaffold atual não há entidades nem consultas; portanto, haverá SQL visível quando essas operações forem implementadas.
+
+As credenciais não devem ser adicionadas ao repositório. O arquivo `application-dev.yml` possui somente referências a variáveis de ambiente.
 
 ## Estado atual
 
