@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: ${BOVIGESTOR_DB_URL:jdbc:postgresql://localhost:5433/bovigestor}
+    username: ${BOVIGESTOR_DB_USERNAME:bovigestor}
+    password: ${BOVIGESTOR_DB_PASSWORD}
+
+  flyway:
+    enabled: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
