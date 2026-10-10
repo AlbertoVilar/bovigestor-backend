@@ -39,9 +39,10 @@ Os testes usam o perfil `test`, que desativa a autoconfiguração de DataSource,
 Após criar e configurar um banco PostgreSQL, defina as variáveis de ambiente da sessão:
 
 ```powershell
-$env:BOVIGESTOR_DB_URL = "jdbc:postgresql://localhost:5432/bovigestor"
-$env:BOVIGESTOR_DB_USERNAME = "seu_usuario"
-$env:BOVIGESTOR_DB_PASSWORD = "sua_senha"
+$env:BOVIGESTOR_DB_URL = "jdbc:postgresql://localhost:5433/bovigestor"
+$env:BOVIGESTOR_DB_USERNAME = "bovigestor"
+$securePassword = Read-Host "Senha do banco de dados" -AsSecureString
+$env:BOVIGESTOR_DB_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
 $env:SPRING_PROFILES_ACTIVE = "dev"
 .\mvnw.cmd spring-boot:run
 ```
