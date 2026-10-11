@@ -10,6 +10,7 @@ Follow system and user instructions first, then explicit task scope, this guide,
 
 - Preserve the educational purpose: the developer implements domain exercises unless explicitly delegated.
 - Keep the pure domain independent from Spring, JPA, HTTP, and persistence.
+- Follow the language policy in `docs/01-architecture/ARCHITECTURE.md`: domain and validation messages use Brazilian Portuguese (pt-BR), while code identifiers, comments, and Git commits remain in English.
 - Use feature branches; `develop` and `main` are protected integration branches.
 - Do not commit, push, open or merge a pull request, delete branches, or change infrastructure without explicit authorization.
 - Report real evidence only: commands, outputs, checks, and SHAs actually observed.
