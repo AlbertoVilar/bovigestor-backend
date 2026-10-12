@@ -60,6 +60,13 @@ public class Bovine {
 
         validateBirthDate(birthDate, createdAt);
         validateParentIds(id, fatherId, motherId);
+        validateParentage(
+                registrationCategory,
+                fatherId,
+                motherId,
+                fatherRegistrationNumber,
+                motherRegistrationNumber
+        );
         validateRegistrationDetails(
                 registrationCategory,
                 registrationNumber,
@@ -154,4 +161,38 @@ public class Bovine {
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
+
+    private static void validateParentage(
+            BovineRegistrationCategory category,
+            BovineId fatherId,
+            BovineId motherId,
+            String fatherRegistrationNumber,
+            String motherRegistrationNumber
+    ) {
+        if (!requiresParentage(category)) {
+            return;
+        }
+
+        if (!hasParentReference(fatherId, fatherRegistrationNumber)) {
+            throw new IllegalArgumentException(
+                    "Para bovinos PO ou PC, a referência do pai é obrigatória"
+            );
+        }
+
+        if (!hasParentReference(motherId, motherRegistrationNumber)) {
+            throw new IllegalArgumentException(
+                    "Para bovinos PO ou PC, a referência da mãe é obrigatória"
+            );
+        }
+    }
+
+    private static boolean requiresParentage(BovineRegistrationCategory category) {
+        return category == BovineRegistrationCategory.PO
+                || category == BovineRegistrationCategory.PC;
+    }
+
+    private static boolean hasParentReference(BovineId parentId, String registrationNumber) {
+        return parentId != null || hasText(registrationNumber);
+    }
+
 }
