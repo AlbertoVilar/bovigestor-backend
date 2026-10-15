@@ -3,3 +3,8 @@ spring:
     name: bovigestor-backend
   profiles:
     default: dev
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
