@@ -78,7 +78,7 @@ Os participantes de infraestrutura e as portas nos fluxos **PROPOSED** abaixo s�
 
 ```mermaid
 sequenceDiagram
-    actor Actor as Usuário autorizado proposto
+    actor Requester as Usuário autorizado proposto
     participant Web as Controller futuro
     participant Tx as Configuração transacional futura
     participant App as Application Service futuro
@@ -89,7 +89,7 @@ sequenceDiagram
     participant OwnershipPort as Porta de gravação da titularidade futura
     participant Jpa as Adapters JPA futuros
     participant DB as PostgreSQL futuro
-    Actor->>Web: solicitar cadastro com fazenda
+    Requester->>Web: solicitar cadastro com fazenda
     Web->>Tx: executar caso de uso com comando e contexto
     Tx->>Tx: abrir transação externa
     Tx->>App: criar bovino e titularidade inicial
@@ -111,12 +111,12 @@ sequenceDiagram
         App-->>Tx: ID do bovino
         Tx->>Tx: confirmar transação externa
         Tx-->>Web: ID do bovino
-        Web-->>Actor: resposta a definir
+        Web-->>Requester: resposta a definir
     else falha de qualquer gravação
         App-->>Tx: propagar falha
         Tx->>Tx: desfazer transação externa
         Tx-->>Web: erro a definir
-        Web-->>Actor: resposta a definir
+        Web-->>Requester: resposta a definir
     end
     Note over Web,DB: Contrato do command e titularidade obrigatória aguardam ADR-007; nenhuma porta ou adapter futuros existe hoje.
 ```
@@ -125,14 +125,14 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    actor Actor as Usuário autorizado proposto
+    actor Requester as Usuário autorizado proposto
     participant Tx as Configuração transacional futura
     participant App as Application Service de transferência futuro
     participant OwnerPort as Porta de titularidade futura
     participant FarmPort as Porta de consulta Farm futura
     participant Jpa as Adapters JPA futuros
     participant DB as PostgreSQL futuro
-    Actor->>Tx: transferir(bovineId, destino, instante)
+    Requester->>Tx: transferir(bovineId, destino, instante)
     Tx->>Tx: abrir transação externa
     Tx->>App: executar transferência
     App->>OwnerPort: obter período atual na data
@@ -156,11 +156,11 @@ sequenceDiagram
     alt sem conflito temporal
         App-->>Tx: transferência confirmada, mesmo BovineId
         Tx->>Tx: confirmar transação externa
-        Tx-->>Actor: confirmação
+        Tx-->>Requester: confirmação
     else conflito ou falha
         App-->>Tx: propagar falha
         Tx->>Tx: desfazer transação externa
-        Tx-->>Actor: erro a definir
+        Tx-->>Requester: erro a definir
     end
 ```
 
