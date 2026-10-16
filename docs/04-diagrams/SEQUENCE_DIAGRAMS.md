@@ -41,7 +41,7 @@ sequenceDiagram
     Tx->>DB: commit
     Tx-->>Web: FarmId
     Web-->>Client: 201 {id}
-    Note over Web,DB: Em falha, rollback; handler HTTP responde 400, 405, 409, 415 ou 500 conforme a causa conhecida.
+    Note over Web,DB: Em caso de falha ocorre rollback. O handler HTTP responde conforme a causa conhecida.
 ```
 
 O diagrama mostra chamadas lógicas das portas aos adapters; o código não faz a porta invocar concretamente o adapter. A injeção Spring liga implementação e interface. O SQL de inserção pode ser enviado no flush/commit, não necessariamente no instante de `persist()`.
@@ -118,7 +118,7 @@ sequenceDiagram
         Tx-->>Web: erro a definir
         Web-->>Requester: resposta a definir
     end
-    Note over Web,DB: Contrato do command e titularidade obrigatória aguardam ADR-007; nenhuma porta ou adapter futuros existe hoje.
+    Note over Web,DB: O contrato do command e a titularidade obrigatória aguardam ADR-007. As portas e adapters futuros ainda não existem.
 ```
 
 ## UC-010 — transferir entre fazendas (PROPOSED)
@@ -223,7 +223,7 @@ sequenceDiagram
     App-->>Tx: registro e impedimento, se houver
     Tx->>Tx: confirmar ou desfazer transação
     Tx-->>Vet: resultado
-    Note over Vet,DB: Não existe cálculo de descarte; parâmetros dependem de validação técnica/regulatória.
+    Note over Vet,DB: Ainda não existe cálculo de descarte. Os parâmetros dependem de validação técnica e regulatória.
 ```
 
 ## UC-014 — diagnóstico gestacional (PROPOSED)
