@@ -1,6 +1,6 @@
 # BoviGestor Backend
 
-Backend educacional independente do BoviGestor, criado para apoiar o desenvolvimento da autonomia de Alberto em Java e Spring Boot. Este repositório começa deliberadamente como um scaffold: ainda não há entidades, regras de negócio, APIs, repositórios ou casos de uso.
+Backend educacional independente do BoviGestor, criado para apoiar o desenvolvimento da autonomia de Alberto em Java e Spring Boot. O cadastro de fazendas já percorre API, Application, Domain e persistência; o cadastro de bovinos possui Domain e Application, mas ainda não tem adapter de persistência ou API. Consulte a [visão geral](docs/00-overview/SYSTEM_OVERVIEW.md) e o [estado atual](docs/00-overview/PROJECT_CURRENT_STATE.md).
 
 ## Stack e versões
 
@@ -10,8 +10,10 @@ Backend educacional independente do BoviGestor, criado para apoiar o desenvolvim
 - Spring Web MVC
 - Spring Data JPA
 - PostgreSQL JDBC Driver
+- H2 para perfis locais e testes
 - Flyway (com suporte PostgreSQL)
-- Spring Boot Test, JUnit e Mockito
+- Bean Validation e Springdoc OpenAPI
+- Spring Boot Test, JUnit, AssertJ e Mockito
 
 ## Pré-requisitos
 
@@ -32,7 +34,7 @@ No diretório `backend`:
 .\mvnw.cmd test
 ```
 
-Os testes usam o perfil `test`, que desativa a autoconfiguração de DataSource, JPA e Flyway. Isso evita a necessidade de PostgreSQL durante esta etapa e não o substitui por H2.
+Os testes de integração usam o perfil `test` com H2 em memória, JPA e a migration Flyway V1. Há também testes para o perfil `h2`. Não é necessário iniciar PostgreSQL para executar `verify`; a compatibilidade com PostgreSQL ainda precisa de validação de integração específica.
 
 ## Iniciar com PostgreSQL no perfil `dev`
 
@@ -49,10 +51,10 @@ $env:SPRING_PROFILES_ACTIVE = "dev"
 
 No IntelliJ, abra a configuração de execução da aplicação e adicione `dev` em **Active profiles** (ou `-Dspring.profiles.active=dev` em **VM options**). O perfil `dev` usa exclusivamente PostgreSQL e mantém Flyway ativo.
 
-O perfil `dev` também registra as instruções SQL e seus valores de parâmetros no console. No scaffold atual não há entidades nem consultas; portanto, haverá SQL visível quando essas operações forem implementadas.
+O perfil `dev` registra instruções SQL e valores de parâmetros no console. Use dados locais apropriados para desenvolvimento.
 
 As credenciais não devem ser adicionadas ao repositório. O arquivo `application-dev.yml` possui somente referências a variáveis de ambiente.
 
 ## Estado atual
 
-Scaffold inicial do backend, sem funcionalidades de negócio.
+`POST /api/v1/farms` cadastra uma fazenda e responde HTTP 201 com o ID. O caso de uso de criação de bovinos existe em Java puro, mas não está exposto por HTTP nem persistido. Requisitos, casos de uso, diagramas e próximas waves estão ligados na [visão geral](docs/00-overview/SYSTEM_OVERVIEW.md).
