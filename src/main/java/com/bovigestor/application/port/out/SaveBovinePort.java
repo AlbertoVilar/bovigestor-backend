@@ -4,5 +4,5 @@ import com.bovigestor.domain.model.Bovine;
 
 public interface SaveBovinePort {
 
-    Bovine save(Bovine bovine);
+    void save(Bovine bovine);
 }
