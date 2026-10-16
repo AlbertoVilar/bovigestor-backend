@@ -174,6 +174,17 @@ class BovineTest {
     }
 
     @Test
+    void shouldRejectNullRegistrationCategory() {
+        BovineRegistrationData data = registrationData()
+                .withCategory(null)
+                .build();
+
+        assertThatThrownBy(() -> createBovine(data))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("A categoria de registro do bovino é obrigatória");
+    }
+
+    @Test
     void shouldRejectNullCreatedAt() {
         assertThatThrownBy(() -> createBovine(BOVINE_ID, INTERNAL_CODE, registrationData().build(), null))
                 .isInstanceOf(NullPointerException.class)

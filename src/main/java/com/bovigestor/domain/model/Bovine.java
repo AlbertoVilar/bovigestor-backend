@@ -51,7 +51,10 @@ public class Bovine {
         this.earTag = data.earTag();
         this.registrationNumber = data.registrationNumber();
         this.registrationAssociation = data.registrationAssociation();
-        this.registrationCategory = data.registrationCategory();
+        this.registrationCategory = Objects.requireNonNull(
+                data.registrationCategory(),
+                "A categoria de registro do bovino é obrigatória"
+        );
         this.fatherId = data.fatherId();
         this.motherId = data.motherId();
         this.fatherRegistrationNumber = data.fatherRegistrationNumber();
