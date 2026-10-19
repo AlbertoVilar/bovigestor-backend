@@ -86,6 +86,78 @@ public class Bovine {
         return new Bovine(id, internalCode, data, createdAt);
     }
 
+    public BovineId id() {
+        return id;
+    }
+
+    public BovineInternalCode internalCode() {
+        return internalCode;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public BovineSex sex() {
+        return sex;
+    }
+
+    public String breed() {
+        return breed;
+    }
+
+    public String coatColor() {
+        return coatColor;
+    }
+
+    public LocalDate birthDate() {
+        return birthDate;
+    }
+
+    public BovineStatus status() {
+        return status;
+    }
+
+    public String earTag() {
+        return earTag;
+    }
+
+    public String registrationNumber() {
+        return registrationNumber;
+    }
+
+    public String registrationAssociation() {
+        return registrationAssociation;
+    }
+
+    public BovineRegistrationCategory registrationCategory() {
+        return registrationCategory;
+    }
+
+    public BovineId fatherId() {
+        return fatherId;
+    }
+
+    public BovineId motherId() {
+        return motherId;
+    }
+
+    public String fatherRegistrationNumber() {
+        return fatherRegistrationNumber;
+    }
+
+    public String motherRegistrationNumber() {
+        return motherRegistrationNumber;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
+
+    public Instant updatedAt() {
+        return updatedAt;
+    }
+
     private static String validateName(String name) {
         Objects.requireNonNull(name, "O nome do bovino é obrigatório");
 
