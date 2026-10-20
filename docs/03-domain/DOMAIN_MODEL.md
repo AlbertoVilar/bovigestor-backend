@@ -1,10 +1,10 @@
 # Modelo de domínio e limites DDD
 
-Base: código em `develop` (`0804e609857d22983e9839f7c844b1e45b2b40a0`). [Diagramas de classes](../04-diagrams/CLASS_DIAGRAMS.md), [dados](../05-data/DATA_MODEL.md) e [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md) complementam este texto.
+Base: implementação da branch `feat/bovine-web-01`, baseada em `7257c2bce524274bad106a5894bde7c8b98a4286`. [Diagramas de classes](../04-diagrams/CLASS_DIAGRAMS.md), [dados](../05-data/DATA_MODEL.md) e [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md) complementam este texto.
 
 ## Modelo implementado
 
-`Farm` e `Bovine` são entidades identificadas por `FarmId` e `BovineId`, respectivamente, e tratadas aqui como raízes de agregados independentes: suas factories são as entradas públicas para criá-las. O código não declara uma interface `AggregateRoot`. Nenhum relacionamento direto `Bovine` → `Farm` existe hoje. `Farm` possui métodos públicos de leitura e de mudança de status; `Bovine` expõe apenas `createManually(...)`, sem getters, alteração de estado ou reconstituição pública.
+`Farm` e `Bovine` são entidades identificadas por `FarmId` e `BovineId`, respectivamente, e tratadas aqui como raízes de agregados independentes: suas factories são as entradas públicas para criá-las. O código não declara uma interface `AggregateRoot`. Nenhum relacionamento direto `Bovine` → `Farm` existe hoje. `Farm` e `Bovine` possuem métodos públicos de leitura; `Bovine` ainda não tem alteração de estado ou reconstituição pública a partir de JPA.
 
 | Elemento | Tipo e responsabilidade | Invariantes ou limites existentes |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ Base: código em `develop` (`0804e609857d22983e9839f7c844b1e45b2b40a0`). [Diagra
 | `Farm` | Entidade/raiz: ID, nome, série, status, criação e atualização. | `create` inicia `ACTIVE`; nome não nulo/em branco; série `[A-Z]{3,4}`; timestamps de transições não retrocedem. `activate/deactivate` são idempotentes quando já no estado desejado. |
 | `FarmStatus` | Enum `ACTIVE`, `INACTIVE`. | Não há fluxo Application para mudança de status. |
 | `BovineId` | Value Object `record(Long value)` | Não nulo e positivo; igualdade por valor. Identidade técnica a preservar em futuras transferências. |
-| `BovineInternalCode` | Value Object `record(String value)` | Série de 3–4 letras maiúsculas, hífen, dois dígitos, hífen e sequência positiva com ao menos quatro dígitos. Não verifica ano corrente, série de fazenda ou unicidade. |
+| `BovineInternalCode` | Value Object `record(String value)` | Série de 3–4 letras maiúsculas, hífen, dois dígitos, hífen e sequência positiva com ao menos quatro dígitos. Não verifica ano corrente nem série de fazenda; a persistência impõe unicidade global. |
 | `Bovine` | Entidade/raiz criada por `createManually`. | Exige ID, código, dados, data de criação, nome, sexo, status e categoria. Regras de nascimento, genitores e registro descritas abaixo. |
 | `BovineRegistrationData` | `record` de 14 parâmetros usado para criar `Bovine`. | É objeto de parâmetros; **não** entidade persistente independente. Sua construção isolada não valida todos os campos; a factory do bovino valida as invariantes. |
 | `BovineRegistrationCategory` | Enum `PO`, `PC`, `PA`, `UNREGISTERED`. | Categoria é obrigatória e não recebe default. |
@@ -35,12 +35,12 @@ Alguns campos são opcionais hoje (`breed`, `coatColor`, `birthDate`, `earTag` e
 
 ## Fronteiras e referências
 
-As duas entidades não compartilham uma transação de domínio nem navegam uma pela outra. `Bovine` referencia genitores por `BovineId`, não por objetos `Bovine`; referências externas são strings. Isso preserva fronteiras de agregados, mas ainda não garante a integridade referencial dos genitores. `CreateBovineService` coordena criação e chamada à porta de persistência, sem transação configurada e sem fazenda de origem.
+As duas entidades não compartilham uma transação de domínio nem navegam uma pela outra. `Bovine` referencia genitores por `BovineId`, não por objetos `Bovine`; referências externas são strings. A persistência impõe FK aos genitores locais, mas não detecta ciclos genealógicos indiretos. `CreateBovineService` coordena criação e chamada à porta de persistência; `BovineConfig` fornece a fronteira externa transacional. O comando não recebe fazenda de origem.
 
-**Proposta sujeita a aprovação:** uma futura titularidade temporal (`BovineOwnershipPeriod`) registra o vínculo entre `BovineId` e `FarmId` por intervalo de vigência, mantendo o ID do animal constante. O período pode formar agregado próprio, separado da entidade bovina, para controlar concorrência e cronologia sem carregar todo o histórico em `Bovine`. Criar bovino e primeiro período na mesma transação é recomendação técnica, pendente da decisão de contrato de entrada. Ver [ADR pendente](../01-architecture/ARCHITECTURE_DECISIONS.md).
+**Modelo de Domain implementado; uso operacional e persistência ainda pendentes:** `BovineOwnershipPeriod`, identificado por `BovineOwnershipPeriodId`, representa a relação temporal entre `BovineId` e `FarmId`, mantendo estável a identidade do animal. O período pode formar agregado próprio, separado de `Bovine`, para controlar concorrência e cronologia sem carregar o histórico no bovino; essa fronteira segue em discussão. Não há persistência JPA/tabela nem fluxo de criação ou transferência. Criar o bovino e o primeiro período na mesma transação permanece uma recomendação técnica, pendente da decisão do contrato de entrada. Ver [ADR pendente](../01-architecture/ARCHITECTURE_DECISIONS.md).
 
 ## Consistência atual e futura
 
-Hoje, regras dentro de `Farm`/`Bovine` são síncronas e locais. Unicidade de `Farm.codeSeries` usa constraint de banco, e `TransactionTemplate` envolve o cadastro de fazenda. Unicidade de `BovineInternalCode`, titularidade exclusiva, ausência de ciclos genealógicos e consistência entre eventos futuros exigiriam persistência/serviços ou políticas externas; ainda não estão implementadas.
+Hoje, regras dentro de `Farm`/`Bovine` são síncronas e locais. Unicidade de `Farm.codeSeries` e unicidade global de `BovineInternalCode` usam constraints de banco; `TransactionTemplate` envolve os cadastros. O endpoint HTTP técnico do bovino fica apenas no perfil dev e não cria titularidade nem aplica autorização. Titularidade exclusiva, ausência de ciclos genealógicos e consistência entre eventos futuros ainda dependem de implementação ou políticas externas.
 
 Nenhum serviço de domínio foi criado. Introduzi-lo somente quando houver uma regra que não pertença naturalmente a um agregado. Períodos gestacionais, descarte de leite, CCS/CBT e obrigações regulatórias precisam de validação profissional antes de virarem invariantes.

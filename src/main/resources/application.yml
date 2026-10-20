@@ -8,3 +8,8 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+bovigestor:
+  bovine:
+    creation:
+      enabled: false

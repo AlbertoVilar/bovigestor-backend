@@ -1,8 +1,8 @@
 # Modelo relacional e evolução proposta
 
-Fonte atual: [migration V1](../../src/main/resources/db/migration/V1__create_farm_schema.sql), `FarmJpaEntity` e `develop` em `0804e609857d22983e9839f7c844b1e45b2b40a0`. A seção **existente** descreve a base; a seção **PROPOSED** é planejamento, sem SQL executado. Ver [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md) e [modelo de domínio](../03-domain/DOMAIN_MODEL.md).
+Fonte atual: migrations [V1](../../src/main/resources/db/migration/V1__create_farm_schema.sql) e [V2](../../src/main/resources/db/migration/V2__create_bovine_schema.sql), entities JPA e implementação da branch `feat/bovine-web-01`. A seção **existente** descreve a base; a seção **PROPOSED** é planejamento, sem SQL executado. Ver [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md) e [modelo de domínio](../03-domain/DOMAIN_MODEL.md).
 
-## Schema existente — V1
+## Schema existente — V1 e V2
 
 ```mermaid
 erDiagram
@@ -14,13 +14,40 @@ erDiagram
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
+    bovine {
+        BIGINT id PK
+        VARCHAR internal_code UK
+        VARCHAR name
+        VARCHAR sex
+        VARCHAR breed
+        VARCHAR coat_color
+        DATE birth_date
+        VARCHAR status
+        VARCHAR ear_tag
+        VARCHAR registration_number
+        VARCHAR registration_association
+        VARCHAR registration_category
+        BIGINT father_id FK
+        BIGINT mother_id FK
+        VARCHAR father_registration_number
+        VARCHAR mother_registration_number
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+    bovine }o--|| bovine : father_id / mother_id
 ```
 
-V1 também cria a sequência `farm_id_seq` (início 1, incremento 1), que não é tabela ER. `farm.id` é PK, `NOT NULL` e `> 0`; `name` é `VARCHAR(255) NOT NULL` com `TRIM(name)` não vazio; `code_series` é `VARCHAR(4) NOT NULL UNIQUE`; `status` é `VARCHAR(20) NOT NULL` limitado a `ACTIVE`/`INACTIVE`; timestamps são `TIMESTAMP WITH TIME ZONE NOT NULL`. Não existem FKs, índices adicionais declarados ou exclusão lógica. A expressão `[A-Z]{3,4}` é validada no domínio/Web, **não** por CHECK na V1. A entidade JPA é separada de `Farm` e `FarmJpaMapper` converte Domain → JPA.
+V1 cria `farm_id_seq`; V2 cria `bovine_id_seq` (ambas iniciam em 1 e incrementam em 1). As sequences geram identidades técnicas positivas separadas dos códigos de negócio.
+
+`farm.id` é PK, `NOT NULL` e `> 0`; `name` é `VARCHAR(255) NOT NULL` com `TRIM(name)` não vazio; `code_series` é `VARCHAR(4) NOT NULL UNIQUE`; `status` é `VARCHAR(20) NOT NULL` limitado a `ACTIVE`/`INACTIVE`; timestamps são `TIMESTAMP WITH TIME ZONE NOT NULL`. A expressão `[A-Z]{3,4}` é validada no Domain/Web, não por CHECK na V1.
+
+`bovine` tem 18 colunas alinhadas a `BovineJpaEntity`; `id` é PK positiva; `internal_code` tem constraint global `uq_bovine_internal_code`; sexo, status e categoria são texto restrito aos enums existentes; timestamps são `TIMESTAMP WITH TIME ZONE`. `father_id` e `mother_id` são FKs opcionais autorreferenciadas e não podem apontar para o próprio animal. A V2 também impõe nome não branco, nascimento não posterior a `created_at`, coerência entre categoria e dados de registro, e referências parentais exigidas para PO/PC. Referências externas são campos de texto independentes, sem FK.
+
+As entities JPA são separadas de `Farm`/`Bovine`; mappers manuais convertem Domain → JPA. Não há coluna `farm_id` em `bovine`: o vínculo temporal permanece para uma futura tabela de períodos de titularidade.
 
 ## Modelo PROPOSED — identidade, genealogia e titularidade
 
-Os nomes abaixo são candidatos para discussão. `farm` é a única tabela implementada. O mesmo `bovine.id` técnico continuaria válido depois de transferência; a fazenda atual **não** faria parte da identidade do bovino. O vínculo temporal ficaria em períodos separados.
+Somente os novos conceitos/tabelas abaixo são candidatos para discussão; `farm` e `bovine` já existem. O mesmo `bovine.id` técnico permanece válido depois de transferência; a fazenda atual **não** faz parte da identidade do bovino. O vínculo temporal ficaria em períodos separados.
 
 ```mermaid
 erDiagram
@@ -36,16 +63,6 @@ erDiagram
     farm {
         BIGINT id PK
         VARCHAR code_series UK
-    }
-    bovine {
-        BIGINT id PK
-        VARCHAR internal_code
-        VARCHAR name
-        VARCHAR sex
-        VARCHAR status
-        VARCHAR registration_category
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
     }
     bovine_parent_reference {
         BIGINT id PK
@@ -80,13 +97,13 @@ erDiagram
 
 `bovine_parent_reference` é **uma alternativa** para os atuais campos `fatherId`, `motherId` e números externos; guardar esses campos diretamente em `bovine` também é possível. Não criar tabela própria sem demanda de consulta e decisão sobre cardinalidade. `ownership_transfer` é opcional; os períodos podem bastar, com auditoria separada. Nesse desenho **PROPOSED**, as duas relações de `ownership_transfer` com `farm` têm papéis distintos: `source_farm_id` indica a fazenda de origem e `destination_farm_id` indica a fazenda de destino. A obrigatoriedade de cada vínculo e o modelo de transferência ainda dependem das ADR-007/008. `user_account`, `farm_user_link` e eventual `owner_party` não têm modelo de identidade aprovado. A cardinalidade ER acima é proposta para orientar discussão, não contrato de JPA.
 
-### Constraints e índices candidatos
+### Constraints implementadas e decisões futuras
 
-| Tema | Proposta a revisar |
+| Tema | Regra implementada ou decisão futura |
 | --- | --- |
-| Identidade | `bovine.id` como PK técnica; `bovine.internal_code` com política de unicidade a definir. O padrão do VO sozinho não garante unicidade nem vincula a série da fazenda. |
-| Registro genealógico | Categoria, número, associação e genitores coerentes com a factory; decidir quais regras podem ser CHECK e quais exigem validação entre tabelas. Referências externas não geram FK local. |
-| Genitor local | FK opcional para `bovine.id`; impedir autorreferência e decidir como detectar ciclos indiretos. |
+| Identidade bovina (implementada) | `bovine.id` é PK técnica; `bovine.internal_code` é único globalmente por `uq_bovine_internal_code`. O prefixo do código não determina fazenda. |
+| Registro genealógico (implementado) | V2 replica por `CHECK` as coerências locais entre categoria, registros e referências exigidas; o Domain permanece fonte das invariantes de criação. Referências externas não geram FK. |
+| Genitor local (implementado) | FKs opcionais para `bovine.id` e checks contra autorreferência. A existência é garantida pelo banco; ciclos indiretos não são verificados. |
 | Titularidade ativa | Candidato: índice único parcial PostgreSQL por `bovine_id` quando `ended_at IS NULL`, para no máximo um período aberto. Não impede sobreposição entre períodos fechados. |
 | Intervalos temporais | Definir limites inclusivos/exclusivos, fuso, retroatividade e validação de sobreposição. Eventual exclusão temporal PostgreSQL requer projeto e teste de concorrência. |
 | Transferência | Fechar período anterior e abrir novo na mesma transação; manter histórico e `BovineId`; definir como tratar saída externa. |
@@ -152,4 +169,4 @@ erDiagram
 
 ## Estratégia de migração
 
-A V1 já existe e não deve ser recriada ou editada retroativamente para introduzir bovinos. Qualquer V2 futura precisa de gate próprio, teste H2/PostgreSQL e análise de dados/índices. O baseline atual usa H2 em integração; compatibilidade PostgreSQL ainda exige validação direta. Nenhuma migration foi criada nesta tarefa.
+V1 e V2 já existem e não devem ser recriadas nem editadas retroativamente. Qualquer mudança de schema posterior deve usar nova migration (V3+) com gate próprio, teste H2/PostgreSQL e análise de dados/índices. A compatibilidade atual é validada em PostgreSQL 17 via Testcontainers e pelo smoke test dev; isso não aprova schema de titularidade.

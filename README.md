@@ -1,6 +1,6 @@
 # BoviGestor Backend
 
-Backend educacional independente do BoviGestor, criado para apoiar o desenvolvimento da autonomia de Alberto em Java e Spring Boot. O cadastro de fazendas já percorre API, Application, Domain e persistência; o cadastro de bovinos possui Domain e Application, mas ainda não tem adapter de persistência ou API. Consulte a [visão geral](docs/00-overview/SYSTEM_OVERVIEW.md) e o [estado atual](docs/00-overview/PROJECT_CURRENT_STATE.md).
+Backend educacional independente do BoviGestor, criado para apoiar o desenvolvimento da autonomia de Alberto em Java e Spring Boot. O cadastro técnico de bovinos já percorre API, Application, Domain e persistência no ambiente local de desenvolvimento. Ele ainda não é um cadastro operacional: não cria titularidade inicial e não possui autenticação/autorização por fazenda. Consulte a [visão geral](docs/00-overview/SYSTEM_OVERVIEW.md) e o [estado atual](docs/00-overview/PROJECT_CURRENT_STATE.md).
 
 ## Stack e versões
 
@@ -34,7 +34,7 @@ No diretório `backend`:
 .\mvnw.cmd test
 ```
 
-Os testes de integração usam o perfil `test` com H2 em memória, JPA e a migration Flyway V1. Há também testes para o perfil `h2`. Não é necessário iniciar PostgreSQL para executar `verify`; a compatibilidade com PostgreSQL ainda precisa de validação de integração específica.
+Os testes de integração usam H2 em memória e PostgreSQL 17 descartável via Testcontainers. Para executar a suíte completa, mantenha um Docker Engine disponível (Rancher Desktop, por exemplo). O perfil `dev` usa o PostgreSQL local em `127.0.0.1:5433`.
 
 ## Iniciar com PostgreSQL no perfil `dev`
 
@@ -55,6 +55,34 @@ O perfil `dev` registra instruções SQL e valores de parâmetros no console. Us
 
 As credenciais não devem ser adicionadas ao repositório. O arquivo `application-dev.yml` possui somente referências a variáveis de ambiente.
 
+### Cadastro técnico de bovino (somente desenvolvimento)
+
+O `POST /api/v1/bovines` só é registrado no perfil `dev`, com `bovigestor.bovine.creation.enabled=true`. A configuração base define a flag como `false`, e o perfil de desenvolvimento habilita o smoke test e vincula o servidor a `127.0.0.1`. Não habilite essa operação em produção: o fluxo ainda não cria o primeiro período de titularidade, não identifica a fazenda responsável e não aplica autenticação/autorização.
+
+Exemplo para `POST http://localhost:8080/api/v1/bovines`:
+
+```json
+{
+  "name": "Bovina Teste API",
+  "internalCode": "BVL-26-985731",
+  "sex": "FEMALE",
+  "breed": "Nelore",
+  "coatColor": "Branca",
+  "birthDate": "2024-05-12",
+  "status": "ACTIVE",
+  "earTag": "BRINCO-985731",
+  "registrationNumber": null,
+  "registrationAssociation": null,
+  "registrationCategory": "UNREGISTERED",
+  "fatherId": null,
+  "motherId": null,
+  "fatherRegistrationNumber": null,
+  "motherRegistrationNumber": null
+}
+```
+
+Uma requisição válida responde `201 Created` com `{"id": 123}` (o valor é gerado pelo banco). Campos inválidos e referências locais inexistentes respondem `400`; `internalCode` duplicado globalmente responde `409`; falhas inesperadas respondem `500` sem detalhes internos. A documentação gerada fica em `http://localhost:8080/swagger-ui/index.html` e `http://localhost:8080/v3/api-docs` quando o perfil `dev` está ativo.
+
 ## Estado atual
 
-`POST /api/v1/farms` cadastra uma fazenda e responde HTTP 201 com o ID. O caso de uso de criação de bovinos existe em Java puro, mas não está exposto por HTTP nem persistido. Requisitos, casos de uso, diagramas e próximas waves estão ligados na [visão geral](docs/00-overview/SYSTEM_OVERVIEW.md).
+`POST /api/v1/farms` cadastra uma fazenda e responde HTTP 201 com o ID. `POST /api/v1/bovines` executa o cadastro técnico somente no perfil local `dev`; a titularidade e a autorização operacional permanecem em aberto. Consulte os [requisitos](docs/01-requirements/TRACEABILITY_MATRIX.md), [decisões](docs/01-architecture/ARCHITECTURE_DECISIONS.md) e [próximas waves](docs/07-planning/IMPLEMENTATION_ROADMAP.md).

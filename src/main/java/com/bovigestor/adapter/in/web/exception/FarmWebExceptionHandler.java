@@ -13,6 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.sql.SQLException;
 import java.util.ArrayDeque;
@@ -29,6 +30,7 @@ public class FarmWebExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FarmWebExceptionHandler.class);
     private static final String UNIQUE_VIOLATION_SQL_STATE = "23505";
+    private static final String FOREIGN_KEY_VIOLATION_SQL_STATE = "23503";
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleValidation(MethodArgumentNotValidException exception) {
@@ -93,6 +95,17 @@ public class FarmWebExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(problem);
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ProblemDetail> handleResourceNotFound(NoResourceFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                "O recurso solicitado não foi encontrado."
+        );
+        problem.setTitle("Recurso não encontrado");
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(
             DataIntegrityViolationException exception
@@ -107,7 +120,28 @@ public class FarmWebExceptionHandler {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
         }
 
+        if (hasSqlState(exception, FOREIGN_KEY_VIOLATION_SQL_STATE)) {
+            ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                    HttpStatus.BAD_REQUEST,
+                    "Uma referência local informada não existe."
+            );
+            problem.setTitle("Referência inválida");
+
+            return ResponseEntity.badRequest().body(problem);
+        }
+
         return internalServerError(exception);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidDomainInput(IllegalArgumentException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Um ou mais valores informados não atendem às regras de cadastro."
+        );
+        problem.setTitle("Dados inválidos");
+
+        return ResponseEntity.badRequest().body(problem);
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,6 +1,6 @@
 # Diagramas de sequência
 
-Fonte: `develop` em `0804e609857d22983e9839f7c844b1e45b2b40a0`. Os rótulos **IMPLEMENTED**, **PARTIAL** e **PROPOSED** delimitam o que o código executa hoje. PostgreSQL é o banco do perfil `dev`; os testes de integração usam H2. Veja [arquitetura](../01-architecture/ARCHITECTURE.md) e [casos de uso](../02-use-cases/USE_CASE_CATALOG.md).
+Fonte: implementação da branch `feat/bovine-web-01`, baseada em `7257c2bce524274bad106a5894bde7c8b98a4286`. Os rótulos **IMPLEMENTED**, **PARTIAL** e **PROPOSED** delimitam o que o código executa hoje. PostgreSQL é o banco do perfil `dev`; integrações usam H2 e Testcontainers PostgreSQL. Veja [arquitetura](../01-architecture/ARCHITECTURE.md) e [casos de uso](../02-use-cases/USE_CASE_CATALOG.md).
 
 ## UC-001 — criar fazenda (IMPLEMENTED)
 
@@ -46,31 +46,54 @@ sequenceDiagram
 
 O diagrama mostra chamadas lógicas das portas aos adapters; o código não faz a porta invocar concretamente o adapter. A injeção Spring liga implementação e interface. O SQL de inserção pode ser enviado no flush/commit, não necessariamente no instante de `persist()`.
 
-## UC-004 — criar bovino (PARTIAL: Domain/Application)
+## UC-004 — criar bovino (PARTIAL: fluxo técnico, somente dev)
 
 ```mermaid
 sequenceDiagram
-    actor Caller as Chamador Java ou teste
+    actor Client as Cliente HTTP local
+    participant Web as CreateBovineController
+    participant Mapper as BovineWebMapper
     participant UseCase as CreateBovineUseCase
+    participant Config as BovineConfig / TransactionTemplate
     participant Service as CreateBovineService
     participant IdPort as BovineIdGenerationPort
     participant Code as BovineInternalCode
     participant Domain as Bovine
     participant SavePort as SaveBovinePort
-    Caller->>UseCase: create(CreateBovineCommand)
-    UseCase->>Service: implementação pura Java
+    participant Jpa as Adapters JPA bovinos
+    participant DB as PostgreSQL (perfil dev)
+    Client->>Web: POST /api/v1/bovines (BovineRequest)
+    Web->>Web: Bean Validation
+    Web->>Mapper: toCommand(request)
+    Mapper-->>Web: CreateBovineCommand
+    Web->>UseCase: create(command)
+    UseCase->>Config: executar caso de uso
+    Config->>Config: abrir transação
+    Config->>Service: create(command)
     Service->>IdPort: nextId()
+    IdPort->>Jpa: implementação da porta
+    Jpa->>DB: SELECT nextval('bovine_id_seq')
+    DB-->>Jpa: valor da sequência
+    Jpa-->>IdPort: BovineId
     IdPort-->>Service: BovineId
     Service->>Code: new(command.internalCode())
     Service->>Service: toRegistrationData(command)
     Service->>Domain: createManually(id, code, data, clock.instant())
     Domain-->>Service: Bovine validado
     Service->>SavePort: save(bovine)
-    Service-->>Caller: BovineId
-    Note over Caller,SavePort: Sem controller, bean Spring, adapter JPA, transação externa ou tabela bovine.
+    SavePort->>Jpa: implementação da porta
+    Jpa->>DB: EntityManager.persist(entity)
+    Jpa-->>SavePort: persistência solicitada
+    SavePort-->>Service: retorno
+    Service-->>Config: BovineId
+    Config->>DB: commit da transação externa
+    Config-->>UseCase: BovineId
+    UseCase-->>Web: BovineId
+    Web-->>Client: 201 {id}
+    Note over Web,DB: Controller registrado somente em dev; flag base false; bind HTTP dev em 127.0.0.1.
 ```
 
-`UseCase` e `Service` são o mesmo objeto de implementação quando composto; a seta intermediária explicita o contrato. Os testes usam mocks das portas, portanto não comprovam gravação real.
+O teste HTTP + Testcontainers comprova a gravação e a resposta para esse cadastro técnico. Não há `FarmId`, período inicial de titularidade ou autorização neste fluxo; seu uso operacional permanece bloqueado até as decisões e implementações das ADR-007/IAM.
 
 ## UC-005 — criação com titularidade inicial (PROPOSED)
 
@@ -84,7 +107,7 @@ sequenceDiagram
     participant App as Application Service futuro
     participant FarmPort as Porta de consulta Farm futura
     participant Bovine as Bovine
-    participant Ownership as BovineOwnershipPeriod futuro
+    participant Ownership as BovineOwnershipPeriod (Domain existente)
     participant BovinePort as Porta de gravação Bovine futura
     participant OwnershipPort as Porta de gravação da titularidade futura
     participant Jpa as Adapters JPA futuros
@@ -118,7 +141,7 @@ sequenceDiagram
         Tx-->>Web: erro a definir
         Web-->>Requester: resposta a definir
     end
-    Note over Web,DB: O contrato do command e a titularidade obrigatória aguardam ADR-007. As portas e adapters futuros ainda não existem.
+    Note over Web,DB: BovineOwnershipPeriod existe no Domain, mas o contrato do command, o fluxo de criação inicial e sua persistência aguardam ADR-007; as portas e adapters operacionais ainda não existem.
 ```
 
 ## UC-010 — transferir entre fazendas (PROPOSED)
