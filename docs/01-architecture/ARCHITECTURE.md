@@ -1,6 +1,6 @@
 # Arquitetura hexagonal atual
 
-Referência: `develop` em `0804e609857d22983e9839f7c844b1e45b2b40a0`. O BoviGestor usa arquitetura hexagonal pragmática e DDD leve. Consulte o [estado atual](../00-overview/PROJECT_CURRENT_STATE.md), o [modelo de domínio](../03-domain/DOMAIN_MODEL.md) e as [decisões](ARCHITECTURE_DECISIONS.md).
+Referência: implementação da branch `feat/bovine-web-01`, baseada em `7257c2bce524274bad106a5894bde7c8b98a4286`. O BoviGestor usa arquitetura hexagonal pragmática e DDD leve. Consulte o [estado atual](../00-overview/PROJECT_CURRENT_STATE.md), o [modelo de domínio](../03-domain/DOMAIN_MODEL.md) e as [decisões](ARCHITECTURE_DECISIONS.md).
 
 ## Pacotes e responsabilidades
 
@@ -10,12 +10,12 @@ com.bovigestor
 ├── application.port.in             commands e interfaces de caso de uso
 ├── application.port.out            contratos de ID e gravação
 ├── application.service             coordenação pura em Java
-├── adapter.in.web                  controller, DTO, mapper, erros e OpenAPI
-├── adapter.out.persistence          JPA entity, mapper e adapters de Farm
-└── config                          composição Spring e fronteira transacional de Farm
+├── adapter.in.web                  controllers, DTOs, mappers, erros e OpenAPI
+├── adapter.out.persistence          entities, mappers e adapters JPA de Farm/Bovine
+└── config                          composição Spring e fronteiras transacionais
 ```
 
-`domain.exceptions` e `application.exceptions` contêm apenas `package-info.java`; não há hierarquias de exceção personalizadas. `FarmResponse` é um DTO reservado sem endpoint de leitura. O fluxo bovino ainda não tem adapters nem bean de composição.
+`domain.exceptions` e `application.exceptions` contêm apenas `package-info.java`; não há hierarquias de exceção personalizadas. `FarmResponse` é um DTO reservado sem endpoint de leitura. O fluxo bovino tem gravação e criação Web, mas ainda não tem consulta/reconstituição nem histórico de titularidade.
 
 ```mermaid
 flowchart LR
@@ -32,23 +32,42 @@ flowchart LR
     Mapper --> DB[(farm + farm_id_seq)]
 ```
 
-As setas de chamada no fluxo não invertem a direção das dependências de código: controller importa a porta de entrada; service importa Domain e portas de saída; os adapters implementam portas da Application. Domain e Application não importam Spring, JPA, Hibernate ou HTTP. `Bovine` segue os mesmos limites internos, mas seu fluxo não chega ao banco ou à Web.
+O fluxo bovino tem as mesmas fronteiras, habilitadas somente no perfil local `dev`:
+
+```mermaid
+flowchart LR
+    Client[Cliente HTTP local] --> BovineController[CreateBovineController]
+    BovineController --> BovineWebMapper[BovineWebMapper]
+    BovineWebMapper --> BovineCommand[CreateBovineCommand]
+    BovineController --> BovineUseCase[CreateBovineUseCase]
+    BovineConfig[BovineConfig / TransactionTemplate] -. compõe .-> BovineUseCase
+    BovineUseCase --> BovineService[CreateBovineService]
+    BovineService --> Bovine[Bovine / Domain]
+    BovineService --> BovinePorts[BovineIdGenerationPort / SaveBovinePort]
+    BovineAdapters[Adapters JPA Bovine] -. implementam .-> BovinePorts
+    BovineAdapters --> BovineMapper[BovineJpaMapper / BovineJpaEntity]
+    BovineMapper --> BovineDB[(bovine + bovine_id_seq)]
+```
+
+`CreateBovineController` só é registrado com perfil `dev` e `bovigestor.bovine.creation.enabled=true`; a configuração base deixa a flag desligada. O perfil dev também vincula o HTTP a `127.0.0.1`. Esse guardrail restringe a rota técnica, mas não substitui autenticação/autorização quando o cadastro operacional for projetado.
+
+As setas de chamada não invertem a direção das dependências de código: controller importa a porta de entrada; service importa Domain e portas de saída; adapters implementam portas da Application. Domain e Application não importam Spring, JPA, Hibernate ou HTTP. O Web mapper converte `Long` para `BovineId`; não acessa persistência nem implementa regras genealógicas.
 
 ## Percurso de criação e injeção
 
 `FarmRequest` é validado com Bean Validation e mapeado manualmente para `CreateFarmCommand`; `CreateFarmService` obtém `FarmId`, cria `Farm` usando um `Clock` injetado e invoca `SaveFarmPort`. `JpaSaveFarmAdapter` usa `FarmJpaMapper` e `EntityManager.persist()`. `JpaFarmIdGenerationAdapter` consulta `farm_id_seq`. `FarmConfig` constrói o serviço puro e oferece a implementação de `CreateFarmUseCase` dentro de `TransactionTemplate`; o commit ocorre ao sair dessa fronteira. O adapter de geração de ID também tem anotação transacional própria; ela não substitui a transação externa do caso completo.
 
-`CreateBovineCommand` → `CreateBovineService` → `BovineRegistrationData` → `Bovine.createManually(...)` → `SaveBovinePort` já existe em Java puro. Faltam implementação das portas, composição Spring, transação externa, JPA/migration e controller. Não apresentar a simples chamada à porta como persistência comprovada.
+`CreateBovineCommand` → `CreateBovineService` → `BovineRegistrationData` → `Bovine.createManually(...)` → `SaveBovinePort` permanece Java puro. `BovineConfig` compõe o caso de uso em `TransactionTemplate`; adapters JPA implementam geração e gravação; Flyway V2 cria a tabela e a sequência. A prova de HTTP/PostgreSQL confirma o caminho técnico, não a titularidade operacional.
 
 ## Erros, dados e ambientes
 
-Na Web de fazendas, `FarmWebExceptionHandler` devolve `ProblemDetail` sanitizado: 400 para Bean Validation/JSON inválido, 405 para método, 415 para media type, 409 para violação de unicidade SQLState `23505` e 500 para erro inesperado. Não expõe SQL ou stack trace no corpo HTTP; detalhes internos são registrados no log. Não há tratamento Web bovino.
+O `FarmWebExceptionHandler` global devolve `ProblemDetail` sanitizado: 400 para Bean Validation/JSON inválido, `IllegalArgumentException` de regras de cadastro e referências locais inexistentes (SQLState `23503`); 404 para rota/recurso ausente; 405 para método; 415 para media type; 409 para unicidade (SQLState `23505`); e 500 para erro inesperado. Não expõe SQL ou stack trace no corpo HTTP; falhas inesperadas são registradas no log.
 
-Flyway V1 cria `farm` e `farm_id_seq`; JPA mapeia somente `FarmJpaEntity`. O perfil padrão `dev` aponta para PostgreSQL 17 em `localhost:5433`, com credencial de variável de ambiente; `h2` e `test` usam H2 em memória. `spring.jpa.hibernate.ddl-auto=validate` não cria o schema. A configuração base desabilita OpenAPI; `dev`, `h2` e `test` habilitam. Não existe perfil `prod` definido. PostgreSQL ainda não possui cobertura de integração automatizada no repositório.
+Flyway V1 cria `farm` e `farm_id_seq`; V2 cria `bovine` e `bovine_id_seq`; JPA mapeia ambas as entities. O perfil `dev` aponta para PostgreSQL 17 em `localhost:5433`, com credencial de variável de ambiente; `h2` e `test` usam H2 em memória. `spring.jpa.hibernate.ddl-auto=validate` não cria o schema. A configuração base desabilita OpenAPI e a feature de criação bovina; `dev`, `h2` e `test` habilitam OpenAPI. Não existe perfil `prod` definido. Integração PostgreSQL é coberta por Testcontainers e o smoke test dev foi executado contra o banco local.
 
 ## Testes e manutenção
 
-Testes de domínio e do `CreateBovineService` exercitam invariantes e portas com JUnit/AssertJ/Mockito. Testes HTTP de fazenda usam MockMvc; testes de integração exercitam H2, Flyway, JPA, transação e rollback. O workflow `Backend CI` executa Maven `verify` em PRs para `develop` e `main`; o baseline pós-merge conhecido é de 120 testes aprovados. Ver [matriz](../01-requirements/TRACEABILITY_MATRIX.md).
+Testes de domínio e Application exercitam invariantes e portas com JUnit/AssertJ/Mockito. Testes HTTP usam MockMvc para Farm e Bovine; integrações exercitam H2, Flyway, JPA, transação/rollback e PostgreSQL via Testcontainers. O workflow `Backend CI` executa Maven `verify` em PRs para `develop` e `main`. Ver [matriz](../01-requirements/TRACEABILITY_MATRIX.md).
 
 Entidades concentram regras que lhes pertencem. Value Objects/DTOs imutáveis usam records quando apropriado. Não adicionar interfaces, Domain Services, Lombok ou MapStruct apenas por formalismo. Lombok, se usado, deve evitar `@Data`, setters irrestritos e igualdade automática sem semântica; MapStruct só se justifica para mapeamento estrutural repetitivo, preservando factories/invariantes. Os mapeamentos existentes são manuais.
 

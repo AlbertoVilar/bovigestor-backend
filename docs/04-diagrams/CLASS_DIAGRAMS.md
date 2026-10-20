@@ -1,6 +1,6 @@
 # Diagramas UML de classes
 
-Fonte: `develop` em `0804e609857d22983e9839f7c844b1e45b2b40a0`. **Seção A = código existente. Seção B = desenho conceitual PROPOSED**, sem classes/tabelas correspondentes. Classes de domínio com identidade (`Farm`, `Bovine`) são tratadas como raízes de agregados, sem interface Java `AggregateRoot`. Ver [modelo de domínio](../03-domain/DOMAIN_MODEL.md) e [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md).
+Fonte: implementação da branch `feat/bovine-web-01`, baseada em `7257c2bce524274bad106a5894bde7c8b98a4286`. **Seção A = código existente. Seção B = desenho conceitual PROPOSED para evolução**; `BovineOwnershipPeriod` e `BovineOwnershipPeriodId` já existem apenas no Domain, sem persistência JPA/tabela ou fluxo operacional. `Farm` e `Bovine` são tratadas como raízes de agregados independentes; o limite de agregado de `BovineOwnershipPeriod` permanece em discussão. O código não declara interface Java `AggregateRoot`. Ver [modelo de domínio](../03-domain/DOMAIN_MODEL.md) e [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md).
 
 ## A. Modelo atual
 
@@ -117,7 +117,7 @@ classDiagram
     Bovine ..> BovineRegistrationData : factory reads
 ```
 
-`BovineRegistrationData` é parâmetro da factory, **não** campo retido nem entidade persistente. As setas para `BovineId` representam campos de valor, não relacionamentos navegáveis com objetos `Bovine`. `Bovine` não oferece getters públicos nesta versão.
+`BovineRegistrationData` é parâmetro da factory, **não** campo retido nem entidade persistente. As setas para `BovineId` representam campos de valor, não relacionamentos navegáveis com objetos `Bovine`. `Bovine` oferece accessors públicos de leitura, mas não possui transições públicas de estado nem factory de reconstituição.
 
 ### A3. Caso de uso e adapters de fazenda
 
@@ -210,7 +210,7 @@ classDiagram
 
 `FarmResponse` está desenhado por existir no código, mas não está ligado ao controller: nenhuma consulta foi implementada. `FarmWebExceptionHandler` e `OpenApiConfig` são componentes Web existentes sem associação de domínio.
 
-### A4. Caso de uso bovino, somente em memória/portas
+### A4. Caso de uso bovino — Application
 
 ```mermaid
 classDiagram
@@ -257,11 +257,98 @@ classDiagram
     CreateBovineService ..> Bovine : creates
 ```
 
-Não há implementação JPA das portas bovinas, controller ou bean Spring.
+O diagrama mostra o limite Application. A composição transacional, os adapters JPA e o adapter Web estão no diagrama A5.
+
+### A5. Fluxo Web e persistência técnica de bovino (perfil dev)
+
+```mermaid
+classDiagram
+    class CreateBovineController {
+        -CreateBovineUseCase useCase
+        +create(BovineRequest) ResponseEntity
+    }
+    class BovineRequest {
+        <<record>>
+        +String name
+        +String internalCode
+        +BovineSex sex
+        +String breed
+        +String coatColor
+        +LocalDate birthDate
+        +BovineStatus status
+        +String earTag
+        +String registrationNumber
+        +String registrationAssociation
+        +BovineRegistrationCategory registrationCategory
+        +Long fatherId
+        +Long motherId
+        +String fatherRegistrationNumber
+        +String motherRegistrationNumber
+    }
+    class BovineWebMapper {
+        +toCommand(BovineRequest) CreateBovineCommand
+    }
+    class CreateBovineResponse {
+        <<record>>
+        +Long id
+    }
+    class CreateBovineUseCase {
+        <<interface>>
+        +create(CreateBovineCommand) BovineId
+    }
+    class BovineConfig {
+        +createBovineUseCase(...) CreateBovineUseCase
+    }
+    class CreateBovineService {
+        +create(CreateBovineCommand) BovineId
+    }
+    class BovineIdGenerationPort {
+        <<interface>>
+        +nextId() BovineId
+    }
+    class SaveBovinePort {
+        <<interface>>
+        +save(Bovine) void
+    }
+    class JpaBovineIdGenerationAdapter {
+        +nextId() BovineId
+    }
+    class JpaSaveBovineAdapter {
+        +save(Bovine) void
+    }
+    class BovineJpaMapper {
+        +toEntity(Bovine) BovineJpaEntity
+    }
+    class BovineJpaEntity {
+        -Long id
+        -String internalCode
+        -String name
+        -BovineSex sex
+        -BovineStatus status
+        -Instant createdAt
+        -Instant updatedAt
+    }
+    CreateBovineController --> CreateBovineUseCase : calls
+    CreateBovineController ..> BovineRequest : receives
+    CreateBovineController ..> BovineWebMapper : calls
+    CreateBovineController ..> CreateBovineResponse : returns
+    BovineWebMapper ..> CreateBovineCommand : creates
+    BovineConfig ..> CreateBovineService : constructs
+    BovineConfig ..> CreateBovineUseCase : exposes TransactionTemplate wrapper
+    CreateBovineService ..|> CreateBovineUseCase
+    CreateBovineService --> BovineIdGenerationPort : calls
+    CreateBovineService --> SaveBovinePort : calls
+    JpaBovineIdGenerationAdapter ..|> BovineIdGenerationPort
+    JpaSaveBovineAdapter ..|> SaveBovinePort
+    JpaSaveBovineAdapter ..> BovineJpaMapper : calls
+    BovineJpaMapper ..> BovineJpaEntity : creates
+```
+
+`CreateBovineController` só existe no contexto `dev` quando a feature flag está habilitada; o bind dev usa loopback. A relação com JPA termina em `BovineJpaEntity`, sem referência direta à fazenda. Não há titularidade inicial ou autorização operacional nesse fluxo.
 
 ## B. Modelo conceitual futuro — PROPOSED
 
-As classes abaixo são candidatas, não tipos Java existentes. Cardinalidades descrevem hipóteses para discussão; associações não definem automaticamente cascata JPA, posse de agregado ou transação. O `BovineId` continua estável e os novos agregados devem referenciar IDs técnicos.
+Os tipos `BovineOwnershipPeriod` e `BovineOwnershipPeriodId` já existem no Domain; os demais conceitos abaixo são candidatos. Cardinalidades descrevem hipóteses para discussão; associações não definem automaticamente cascata JPA, persistência ou transação. O `BovineId` continua estável e os vínculos referenciam IDs técnicos.
 
 ### B1. Titularidade e pessoas
 
@@ -276,11 +363,19 @@ classDiagram
         +BovineId id
     }
     class BovineOwnershipPeriod {
-        <<PROPOSED>>
+        <<EXISTING_DOMAIN>>
+        +BovineOwnershipPeriodId id
         +BovineId bovineId
         +FarmId farmId
         +Instant startedAt
         +Instant endedAt
+        +open(id, bovineId, farmId, startedAt) BovineOwnershipPeriod
+        +contains(Instant) boolean
+        +closeAt(Instant) BovineOwnershipPeriod
+    }
+    class BovineOwnershipPeriodId {
+        <<EXISTING_DOMAIN>>
+        +Long value
     }
     class OwnershipTransfer {
         <<PROPOSED_OPTIONAL>>
@@ -298,12 +393,13 @@ classDiagram
     }
     Bovine "1" <-- "0..*" BovineOwnershipPeriod : bovineId
     Farm "1" <-- "0..*" BovineOwnershipPeriod : farmId
+    BovineOwnershipPeriod --> BovineOwnershipPeriodId : id
     UserAccount "1" <-- "0..*" FarmUserLink : user
     Farm "1" <-- "0..*" FarmUserLink : farm
     OwnershipTransfer ..> BovineOwnershipPeriod : may link periods
 ```
 
-`OwnerParty`, `UserAccount` e seus vínculos ainda não têm identidade, campos ou cardinalidade final definidos. Por isso, `OwnerParty` aparece sem associação: decidir se proprietário é usuário, pessoa distinta ou papel no vínculo. `OwnershipTransfer` pode ser desnecessário se os períodos e a auditoria forem suficientes. O período referencia `BovineId` e `FarmId`, sem composição com `Bovine` ou `Farm`; uma transferência candidata atualiza períodos em uma transação.
+`BovineOwnershipPeriod` e `BovineOwnershipPeriodId` são tipos existentes somente no Domain; não há entity JPA, tabela, geração persistente do ID ou caso de uso operacional. `OwnerParty`, `UserAccount` e seus vínculos ainda não têm identidade, campos ou cardinalidade final definidos. Por isso, `OwnerParty` aparece sem associação: decidir se proprietário é usuário, pessoa distinta ou papel no vínculo. `OwnershipTransfer` pode ser desnecessário se os períodos e a auditoria forem suficientes. O período referencia `BovineId` e `FarmId`, sem composição com `Bovine` ou `Farm`; uma transferência candidata atualiza períodos em uma transação.
 
 ### B2. Reprodução
 

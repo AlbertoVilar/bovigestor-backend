@@ -25,3 +25,11 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+
+server:
+  address: 127.0.0.1
+
+bovigestor:
+  bovine:
+    creation:
+      enabled: true

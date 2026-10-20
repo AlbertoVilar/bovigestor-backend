@@ -1,10 +1,10 @@
 # Atores e catálogo de casos de uso
 
-Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e `develop` em `0804e609857d22983e9839f7c844b1e45b2b40a0`. `IMPLEMENTED` indica alcance efetivo; `PARTIAL` indica apenas Domain/Application; `PROPOSED` não é contrato aprovado.
+Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e implementação da branch `feat/bovine-web-01`, baseada em `7257c2bce524274bad106a5894bde7c8b98a4286`. `IMPLEMENTED` indica alcance efetivo; `PARTIAL` indica fluxo técnico com limitação operacional; `PROPOSED` não é contrato aprovado.
 
 ## Atores
 
-**Confirmado tecnicamente:** um cliente HTTP pode chamar `POST /api/v1/farms`; não há autenticação. Testes e chamadores Java podem invocar `CreateBovineUseCase` mediante composição manual, mas não existe bean ou endpoint bovino. Nenhum papel de usuário de negócio está implementado.
+**Confirmado tecnicamente:** um cliente HTTP local pode chamar `POST /api/v1/farms`; não há autenticação. `POST /api/v1/bovines` existe somente no perfil `dev`, com feature flag, bind em loopback e sem autenticação. Nenhum papel de usuário de negócio está implementado; o endpoint bovino é apenas smoke técnico, não cadastro operacional autorizado.
 
 **Propostos:** administrador, proprietário de fazenda, operador, responsável técnico/veterinário e usuário de consulta. Sistema externo de registro/identificação é ator secundário possível, sem integração atual. A permissão de cada papel precisa de decisão de produto e segurança.
 
@@ -15,7 +15,7 @@ Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e `develop`
 | UC-001 | Fazendas: cadastrar fazenda | IMPLEMENTED | RF-001, RF-002 |
 | UC-002 | Fazendas: consultar fazenda | PROPOSED | RF-003 |
 | UC-003 | Fazendas: atualizar/ativar/desativar | PROPOSED; métodos de status somente no domínio | RF-004 |
-| UC-004 | Bovinos: cadastrar manualmente | PARTIAL; Domain/Application | RF-005, RF-006, RF-007 |
+| UC-004 | Bovinos: cadastrar tecnicamente | PARTIAL; fluxo Web e persistência somente em `dev`, sem titularidade/autorização | RF-005, RF-006, RF-007 |
 | UC-005 | Titularidade: registrar titularidade inicial | PROPOSED | RF-008 |
 | UC-006 | Bovinos: consultar bovino | PROPOSED | RF-009 |
 | UC-007 | Bovinos: consultar genealogia e histórico | PROPOSED | RF-009 |
@@ -47,17 +47,17 @@ Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e `develop`
 - **Regras:** `FarmId` positivo; nome não nulo/em branco; série `[A-Z]{3,4}`; unicidade da série no banco; nome HTTP até 255 caracteres.
 - **Requisitos:** RF-001, RF-002, RNF-002, RNF-003, RNF-005. **Aceitação:** testes `CreateFarmControllerHttpTest`, `CreateFarmControllerIntegrationTest`, `CreateFarmServiceIntegrationTest` e `CreateFarmTransactionRollbackIntegrationTest` comprovam os pontos respectivos.
 
-## UC-004 — Cadastrar bovino manualmente (parcial)
+## UC-004 — Cadastrar bovino tecnicamente (parcial)
 
-- **Objetivo:** criar agregado bovino válido e enviar à porta de gravação, retornando `BovineId`.
-- **Ator principal:** chamador da interface Java `CreateBovineUseCase`; nenhum ator HTTP existe. **Secundários:** implementações futuras de `BovineIdGenerationPort` e `SaveBovinePort`.
-- **Pré-condições:** dependências e `Clock` fornecidos ao `CreateBovineService`; `CreateBovineCommand` construído com dados básicos válidos. O comando atual não contém `FarmId`.
-- **Gatilho:** chamada Java `create(command)`.
-- **Fluxo principal implementado:** (1) serviço exige comando; (2) pede `BovineId` à porta; (3) cria `BovineInternalCode`; (4) mapeia dados para `BovineRegistrationData`; (5) chama `Bovine.createManually(...)` com `clock.instant()`; (6) chama `SaveBovinePort.save`; (7) retorna ID.
+- **Objetivo técnico:** criar e persistir um agregado bovino válido, retornando `BovineId`, para validação local da integração.
+- **Ator:** cliente HTTP local no perfil `dev`; não há identidade de usuário ou autorização por fazenda.
+- **Pré-condições:** perfil `dev`, feature flag ativa, PostgreSQL acessível e V1/V2 aplicadas. O command atual não contém `FarmId`.
+- **Gatilho:** `POST /api/v1/bovines` com o contrato `BovineRequest`.
+- **Fluxo principal implementado:** (1) Bean Validation valida o request; (2) `BovineWebMapper` produz `CreateBovineCommand` e converte IDs locais para `BovineId`; (3) controller delega ao `CreateBovineUseCase`; (4) `BovineConfig` abre transação via `TransactionTemplate`; (5) `CreateBovineService` obtém o ID, cria `Bovine` e chama `SaveBovinePort`; (6) adapters persistem no PostgreSQL; (7) controller responde `201` com `{ "id": ... }`.
 - **Alternativas implementadas:** categoria `UNREGISTERED` explícita sem número/associação oficial; PO/PC admitem referências de pai e mãe por IDs locais ou números externos; PA dispensa genitores.
-- **Exceções implementadas:** ID, código, nome, sexo, status, categoria ou instante obrigatórios; nascimento não posterior à data UTC de criação; pai/mãe não podem ter o ID do próprio animal; PO/PC exigem ambos; PO/PC/PA exigem número e associação oficiais. Falhas de porta propagam; o serviço não abre transação por si.
-- **Pós-condição comprovada:** o serviço chama a porta de gravação e retorna o ID em teste unitário; não há prova de gravação real, consulta ou titularidade.
-- **Requisitos:** RF-005, RF-006; RF-007 pendente. **Aceitação atual:** `BovineTest`, `BovineIdTest`, `BovineInternalCodeTest` e `CreateBovineServiceTest`. Persistência e HTTP exigem testes futuros.
+- **Exceções HTTP:** Bean Validation/JSON inválido ou regra de cadastro inválida → 400; genitor local inexistente → 400; `internalCode` duplicado → 409; falha inesperada → 500 sanitizado.
+- **Limitação explícita:** não associa fazenda, não cria `BovineOwnershipPeriod` e não autentica/autorização usuários. Não deve ser exposto em produção.
+- **Requisitos:** RF-005, RF-006 e RF-007 têm fluxo técnico implementado; RF-008 segue pendente. **Evidências:** testes Domain/Application, `BovineWebMapperTest`, `CreateBovineControllerHttpTest`, `CreateBovineControllerAvailabilityTest` e `CreateBovineHttpPostgresIntegrationTest`.
 
 ## UC-005 — Registrar titularidade inicial (proposta prioritária)
 
@@ -69,7 +69,7 @@ Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e `develop`
 - **Exceções propostas:** fazenda inexistente/inativa, conflito temporal ou acesso indevido. Códigos HTTP e regras exatas não estão aprovados.
 - **Pós-condição proposta:** histórico inicia com um único período ativo. **Regra:** identidade bovina não incorpora fazenda atual.
 - **Requisitos:** RF-008, RNF-007. **Aceitação futura:** teste integrado de atomicidade, exclusividade de titularidade ativa e preservação de `BovineId`.
-- **Estado:** PROPOSED; não existe command, tabela ou caso de uso correspondente.
+- **Estado:** PROPOSED/OPEN; não existe command, tabela ou caso de uso correspondente; ADR-007 continua aberto.
 
 ## UC-010 — Transferir bovino entre fazendas (proposta prioritária)
 
