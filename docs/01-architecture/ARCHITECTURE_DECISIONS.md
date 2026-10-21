@@ -9,7 +9,7 @@ Base: `develop` em `0804e609857d22983e9839f7c844b1e45b2b40a0`. `CONFIRMED` descr
 | ADR-003 | Identificadores de negócio não substituem IDs técnicos. | CONFIRMED | `Farm.codeSeries`, `BovineInternalCode` e IDs são distintos. V2 impõe unicidade global de `BovineInternalCode`; o prefixo não identifica a fazenda atual e o código permanece imutável no Domain. |
 | ADR-004 | Genealogia aceita referência local ou número externo por genitor; PO/PC exigem ambos os genitores. | CONFIRMED | `Bovine.validateParentage`; verificação externa e ciclos indiretos ainda não existem. |
 | ADR-005 | Transação do cadastro de fazenda na composição externa. | CONFIRMED | `FarmConfig` envolve `CreateFarmService` em `TransactionTemplate`; rollback coberto por teste. |
-| ADR-006 | Histórico de titularidade por períodos associados a `BovineId` e `FarmId`. | PROPOSED | `BovineOwnershipPeriod` e `BovineOwnershipPeriodId` existem no Domain; tabela e fluxo operacional não existem, e a política temporal completa permanece em aberto. |
+| ADR-006 | Histórico de custódia operacional por períodos associados a `BovineId` e `FarmId`. | PROPOSED | `BovineOwnershipPeriod` e `BovineOwnershipPeriodId` existem no Domain; tabela e fluxo operacional não existem, e a política temporal completa permanece em aberto. |
 | ADR-007 | Registrar titularidade inicial ao criar bovino. | OPEN | `CreateBovineCommand` não tem `FarmId`; alternativas e recomendação abaixo. |
 | ADR-008 | Limites dos agregados futuros e das transações. | OPEN | `Farm` e `Bovine` são raízes separadas hoje; decidir se período é agregado próprio, política de consistência e concorrência. |
 | ADR-009 | SISBOV e outras identificações externas são dados distintos, não universalmente obrigatórios. | OPEN | Não há campo/integração SISBOV nem requisito regulatório aprovado. Definir aplicabilidade, fonte e validação. |
@@ -17,6 +17,7 @@ Base: `develop` em `0804e609857d22983e9839f7c844b1e45b2b40a0`. `CONFIRMED` descr
 | ADR-011 | Reconstituir domínio a partir de JPA sem contornar invariantes. | OPEN | `Bovine` oferece accessors públicos, mas não factory de reconstituição; consulta persistente e mapeamento JPA → Domain continuam pendentes. Projetar com casos de consulta e testes antes de implementar. |
 | ADR-012 | Records para VOs/DTOs imutáveis; Lombok seletivo; MapStruct somente por necessidade. | CONFIRMED | `FarmId`, `BovineId`, `BovineInternalCode`, commands e DTOs usam records; mappers atuais são manuais. |
 | ADR-013 | Identidade própria para cada período histórico de custódia operacional bovino–fazenda. | CONFIRMED (tipo); OPEN (geração e persistência) | O VO de domínio escolhido é `BovineOwnershipPeriodId(Long)`, positivo e imutável. `BovineId`, `FarmId` e o par não identificam uma visita histórica específica. |
+| ADR-014 | Separar identidade técnica permanente, origem histórica e custódia operacional. | OPEN | `BovineOrigin` é apenas uma proposta; origem e criador não estão modelados no Domain nem persistidos. A fazenda responsável pela entrada no rebanho pode diferir da fazenda de origem. |
 
 ## ADR-013 — identidade de `BovineOwnershipPeriod`
 
@@ -39,9 +40,23 @@ Essa relação representa **custódia/gestão operacional**, não propriedade ju
 
 Ainda precisam de decisão/revisão antes de código ou schema: limite de agregado, reconstituição segura, mapeamento Domain–JPA, PK/FK/uniqueness, semântica INSERT/UPDATE, constraints temporais, concorrência e testes de integridade. Nenhuma migration, entidade JPA ou fluxo de geração foi aprovado por este ADR.
 
+## ADR-014 — identidade técnica, origem e custódia do bovino
+
+**Problema:** a identidade técnica permanente do animal, sua origem histórica e a fazenda que atualmente o mantém são conceitos diferentes. Usar a fazenda atual como origem apagaria o histórico; usar a origem como vínculo operacional atribuiria incorretamente o rebanho e os eventos históricos.
+
+**Entendimento de modelagem em avaliação — nenhuma classe ou persistência de origem foi implementada:** `BovineId` continua sendo a identidade técnica do animal. `BovineOrigin` é um Value Object candidato associado a `Bovine`, não uma entidade ou classe existente. O conceito poderá representar informações conhecidas sobre o criador original (pessoa física ou jurídica), a fazenda de origem histórica e identificadores ou evidências oficiais de origem quando aplicáveis. A fazenda da qual o animal foi adquirido pode ser diferente de sua origem histórica. Não foram definidos campos obrigatórios nem a forma de identificar criadores externos ao sistema.
+
+A fazenda responsável pela entrada operacional no rebanho é independente da fazenda de origem e pode ser diferente dela. O cadastro operacional é proposto para validar essa fazenda e criar o primeiro `BovineOwnershipPeriod` na mesma transação externa que cria o bovino; o contrato de entrada, a autorização do ator e os dados exigidos ainda dependem de decisão. O endpoint técnico de criação existente, restrito ao perfil `dev`, não estabelece esse vínculo.
+
+Transferências entre fazendas não criam outro `Bovine` e não alteram sua origem histórica: encerram o período de custódia vigente e abrem outro, preservando `BovineId` e o histórico temporal. Uma venda para fora do sistema preserva os períodos já registrados e encerra a participação do animal no rebanho atual; não se cria um período para uma fazenda externa sem representação no sistema. Custódia operacional não equivale a propriedade jurídica por pessoa física ou jurídica.
+
+**Questões OPEN:** decidir se criador e fazenda de origem são obrigatórios, inclusive para animais adquiridos externamente; como identificar criadores que não usam o BoviGestor; quais fontes e regras validam dados de registro conforme cada associação bovina; como representar origem desconhecida; e como a origem participa do limite de agregado e da reconstituição. Também permanecem pendentes o contrato de cadastro operacional, a persistência e a integração transacional. Não escolher antecipadamente tabela exclusiva, `@Embeddable`, entidade independente ou outro mapeamento JPA.
+
+O `BovineInternalCode` permanece um identificador de negócio imutável e globalmente único conforme V2; seu prefixo não determina fazenda de origem nem fazenda atual. Não inferir origem ou custódia a partir dele.
+
 ## ADR-007 — vínculo inicial entre bovino e fazenda
 
-**Situação observada:** `CreateBovineService` obtém ID, monta `Bovine` e chama `SaveBovinePort`, mas `CreateBovineCommand` não contém fazenda e o serviço não cria `BovineOwnershipPeriod`. O tipo Domain existe, mas não há tabela/adapter nem fluxo que persista o período inicial junto ao bovino; `BovineConfig` fornece uma transação para a criação técnica do bovino, não para bovino + titularidade. Não inferir a fazenda a partir do prefixo de `BovineInternalCode`.
+**Situação observada:** `CreateBovineService` obtém ID, monta `Bovine` e chama `SaveBovinePort`, mas `CreateBovineCommand` não contém fazenda e o serviço não cria `BovineOwnershipPeriod`. O tipo Domain existe, mas não há tabela/adapter nem fluxo que persista o período inicial junto ao bovino; `BovineConfig` fornece uma transação para a criação técnica do bovino, não para bovino + custódia inicial. `Bovine` também não possui um conceito de origem implementado. A fazenda de origem histórica, quando conhecida, não substitui a fazenda responsável pela entrada operacional e pode ser diferente do estabelecimento da aquisição. Não inferir nenhuma delas a partir do prefixo de `BovineInternalCode`.
 
 | Alternativa | Benefício | Custo/risco |
 | --- | --- | --- |
@@ -49,7 +64,7 @@ Ainda precisam de decisão/revisão antes de código ou schema: limite de agrega
 | Criar bovino e vincular em comando posterior obrigatório. | Casos de entrada legada podem ser tratados separadamente. | Estado intermediário sem titular pode ser indesejado; precisa de política explícita. |
 | Derivar fazenda da sessão/usuário e registrar primeiro período. | Menos dados explícitos no comando. | Ainda não há autenticação nem vínculo usuário–fazenda; ambiguidade para múltiplas fazendas. |
 
-**Recomendação técnica, não decisão:** após definir quem pode cadastrar e como se identifica a fazenda, incluir a fazenda explicitamente no contrato de entrada ou contexto de autorização e persistir bovino e titularidade inicial na **mesma transação externa**. Confirmar se animais sem titular local são permitidos antes de exigir o vínculo universalmente. Não alterar o comando nesta documentação.
+**Recomendação técnica, não decisão:** após definir quem pode cadastrar e como se identifica a fazenda responsável, incluir essa fazenda explicitamente no contrato de entrada ou contexto de autorização e persistir bovino e primeiro período de custódia na **mesma transação externa**. Projetar a origem em separado, sem inferi-la da fazenda operacional. Confirmar se animais sem vínculo local são permitidos antes de exigir a custódia inicial universalmente. Não alterar o comando nesta documentação.
 
 ## ADR-006/008 — períodos, concorrência e fronteiras
 
