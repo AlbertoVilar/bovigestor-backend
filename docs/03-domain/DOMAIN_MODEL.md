@@ -35,9 +35,23 @@ Alguns campos são opcionais hoje (`breed`, `coatColor`, `birthDate`, `earTag` e
 
 ## Fronteiras e referências
 
-As duas entidades não compartilham uma transação de domínio nem navegam uma pela outra. `Bovine` referencia genitores por `BovineId`, não por objetos `Bovine`; referências externas são strings. A persistência impõe FK aos genitores locais, mas não detecta ciclos genealógicos indiretos. `CreateBovineService` coordena criação e chamada à porta de persistência; `BovineConfig` fornece a fronteira externa transacional. O comando não recebe fazenda de origem.
+As duas entidades não compartilham uma transação de domínio nem navegam uma pela outra. `Bovine` referencia genitores por `BovineId`, não por objetos `Bovine`; referências externas são strings. A persistência impõe FK aos genitores locais, mas não detecta ciclos genealógicos indiretos. `CreateBovineService` coordena criação e chamada à porta de persistência; `BovineConfig` fornece a fronteira externa transacional. O comando atual não carrega fazenda operacional nem dados de procedência.
 
 **Modelo de Domain implementado; uso operacional e persistência ainda pendentes:** `BovineOwnershipPeriod`, identificado por `BovineOwnershipPeriodId`, representa a relação temporal entre `BovineId` e `FarmId`, mantendo estável a identidade do animal. O período pode formar agregado próprio, separado de `Bovine`, para controlar concorrência e cronologia sem carregar o histórico no bovino; essa fronteira segue em discussão. Não há persistência JPA/tabela nem fluxo de criação ou transferência. Criar o bovino e o primeiro período na mesma transação permanece uma recomendação técnica, pendente da decisão do contrato de entrada. Ver [ADR pendente](../01-architecture/ARCHITECTURE_DECISIONS.md).
+
+### Identidade, origem e custódia
+
+São conceitos distintos e não devem ser deduzidos uns dos outros:
+
+| Conceito | Estado no modelo atual | Entendimento/proposta |
+| --- | --- | --- |
+| Identidade do bovino | `BovineId` é sua identidade técnica; `BovineInternalCode` é um identificador de negócio imutável e globalmente único na persistência; `registrationNumber` é um identificador de registro genealógico externo. | `BovineId` permanece estável em mudança de fazenda e não se confunde com o código interno ou o número de registro. O prefixo do código interno não identifica fazenda atual nem de origem. |
+| Origem histórica | Não existe campo ou tipo de origem em `Bovine`, e não há persistência de origem. | `BovineOrigin` é uma proposta de Value Object associado a `Bovine`, ainda não implementada. Poderá agrupar dados conhecidos do criador original (pessoa física ou jurídica), fazenda de origem histórica e identificadores/evidências oficiais quando aplicáveis. A fazenda da qual o animal foi adquirido pode ser diferente da fazenda de origem. |
+| Custódia operacional | `BovineOwnershipPeriod` e seu identificador existem no Domain; não há tabela JPA nem fluxo operacional. | O período registra a fazenda que mantém o animal em determinado intervalo. A fazenda responsável pela entrada no rebanho pode ser diferente da fazenda de origem. |
+
+No cadastro operacional, propõe-se validar a fazenda responsável pela entrada e criar o primeiro período de custódia na mesma transação externa da criação do bovino. O endpoint técnico atual, restrito ao perfil `dev`, não estabelece esse vínculo. Transferir o animal entre fazendas não cria outro `Bovine` nem altera sua origem histórica: encerra-se o período vigente e inicia-se outro, preservando `BovineId` e os períodos anteriores. Eventuais retificações da origem deverão ocorrer por operação específica e auditável, nunca como consequência automática de uma transferência; essa é uma diretriz proposta, não uma operação implementada. Venda externa preserva o histórico e encerra a presença no rebanho atual; não abre período para fazenda externa não representada no sistema. Custódia por fazenda não determina propriedade jurídica por pessoa física ou jurídica.
+
+Continuam abertas as decisões sobre obrigatoriedade e conteúdo de origem, inclusive em aquisição externa; identificação de criadores externos ao BoviGestor; fontes e validação dos dados por associação bovina; tratamento de origem desconhecida; limite de agregado e reconstituição; integração ao contrato operacional; persistência; autorização; e conversão temporal da entrada inicial. Não se decidiu tabela exclusiva, `@Embeddable`, entidade independente ou outro mapeamento JPA.
 
 ## Consistência atual e futura
 
