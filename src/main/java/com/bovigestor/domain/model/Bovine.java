@@ -24,12 +24,14 @@ public class Bovine {
     private String motherRegistrationNumber;
     private final Instant createdAt;
     private Instant updatedAt;
+    private final BovineOrigin origin;
 
     private Bovine(
             BovineId id,
             BovineInternalCode internalCode,
             BovineRegistrationData data,
-            Instant createdAt
+            Instant createdAt,
+            BovineOrigin origin
     ) {
         this.id = Objects.requireNonNull(id, "O identificador do bovino é obrigatório");
         this.internalCode = Objects.requireNonNull(
@@ -40,6 +42,10 @@ public class Bovine {
         this.createdAt = Objects.requireNonNull(
                 createdAt,
                 "A data de criação é obrigatória"
+        );
+        this.origin = Objects.requireNonNull(
+                origin,
+                "A origem do bovino é obrigatória"
         );
 
         this.name = validateName(data.name());
@@ -81,9 +87,10 @@ public class Bovine {
             BovineId id,
             BovineInternalCode internalCode,
             BovineRegistrationData data,
-            Instant createdAt
+            Instant createdAt,
+            BovineOrigin origin
     ) {
-        return new Bovine(id, internalCode, data, createdAt);
+        return new Bovine(id, internalCode, data, createdAt, origin);
     }
 
     public BovineId id() {
@@ -92,6 +99,10 @@ public class Bovine {
 
     public BovineInternalCode internalCode() {
         return internalCode;
+    }
+
+    public BovineOrigin origin() {
+        return origin;
     }
 
     public String name() {

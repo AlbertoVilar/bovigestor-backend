@@ -35,7 +35,10 @@ final class BovineConstraintTestScenarios {
                 "po-parentage-required",
                 "pc-parentage-required",
                 "father-self-reference",
-                "mother-self-reference"
+                "mother-self-reference",
+                "blank-origin-creator-name",
+                "blank-origin-farm-name",
+                "non-positive-origin-farm-id"
         );
     }
 
@@ -47,7 +50,9 @@ final class BovineConstraintTestScenarios {
                 "status",
                 "registration_category",
                 "created_at",
-                "updated_at"
+                "updated_at",
+                "origin_creator_name",
+                "origin_farm_name"
         );
     }
 
@@ -72,6 +77,9 @@ final class BovineConstraintTestScenarios {
         values.put("mother_registration_number", null);
         values.put("created_at", Instant.parse("2026-10-19T12:00:00Z"));
         values.put("updated_at", Instant.parse("2026-10-19T12:00:00Z"));
+        values.put("origin_creator_name", "Criador de teste");
+        values.put("origin_farm_name", "Fazenda de teste");
+        values.put("origin_farm_id", null);
         return values;
     }
 
@@ -99,6 +107,9 @@ final class BovineConstraintTestScenarios {
             }
             case "father-self-reference" -> values.put("father_id", values.get("id"));
             case "mother-self-reference" -> values.put("mother_id", values.get("id"));
+            case "blank-origin-creator-name" -> values.put("origin_creator_name", "   ");
+            case "blank-origin-farm-name" -> values.put("origin_farm_name", "   ");
+            case "non-positive-origin-farm-id" -> values.put("origin_farm_id", 0L);
             default -> throw new IllegalArgumentException("Unknown CHECK scenario: " + scenario);
         }
     }

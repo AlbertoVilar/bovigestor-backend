@@ -20,7 +20,17 @@ public record BovineOrigin(
 
         creatorName = creatorName.strip();
         originFarmName = originFarmName.strip();
+
+        if (creatorName.length() > 255) {
+            throw new IllegalArgumentException(
+                    "O nome do criador deve conter no máximo 255 caracteres"
+            );
+        }
+
+        if (originFarmName.length() > 255) {
+            throw new IllegalArgumentException(
+                    "O nome da fazenda de origem deve conter no máximo 255 caracteres"
+            );
+        }
     }
-
-
 }

@@ -43,7 +43,8 @@ class CreateBovineProfileGuardIntegrationTest {
               "fatherId": null,
               "motherId": null,
               "fatherRegistrationNumber": null,
-              "motherRegistrationNumber": null
+              "motherRegistrationNumber": null,
+              "origin": {"creatorName": "Ana Silva", "originFarmName": "Fazenda Boa Vista", "originFarmId": null}
             }
             """;
 

@@ -4,6 +4,7 @@ import com.bovigestor.adapter.in.web.exception.FarmWebExceptionHandler;
 import com.bovigestor.application.port.in.CreateBovineCommand;
 import com.bovigestor.application.port.in.CreateBovineUseCase;
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
@@ -85,8 +86,28 @@ class CreateBovineControllerHttpTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                new BovineOrigin("Ana Silva", "Fazenda Boa Vista", null)
         ));
+    }
+
+    @Test
+    void shouldAcceptOriginNamesAtMaximumLength() throws Exception {
+        given(createBovineUseCase.create(any(CreateBovineCommand.class)))
+                .willReturn(new BovineId(735L));
+        String request = validRequest()
+                .replace("Ana Silva", "A".repeat(255))
+                .replace("Fazenda Boa Vista", "F".repeat(255));
+
+        mockMvc.perform(post(ENDPOINT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isCreated());
+
+        var commandCaptor = org.mockito.ArgumentCaptor.forClass(CreateBovineCommand.class);
+        verify(createBovineUseCase).create(commandCaptor.capture());
+        assertThat(commandCaptor.getValue().origin().creatorName()).hasSize(255);
+        assertThat(commandCaptor.getValue().origin().originFarmName()).hasSize(255);
     }
 
     @ParameterizedTest
@@ -100,6 +121,17 @@ class CreateBovineControllerHttpTest {
 
         assertThat(result.getResponse().getContentAsString())
                 .doesNotContain("SQLException", "stackTrace", "INSERT INTO");
+        verifyNoInteractions(createBovineUseCase);
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidOriginRequests")
+    void shouldRejectInvalidOriginWithoutCallingUseCase(String body) throws Exception {
+        mockMvc.perform(post(ENDPOINT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+
         verifyNoInteractions(createBovineUseCase);
     }
 
@@ -239,7 +271,28 @@ class CreateBovineControllerHttpTest {
                 Arguments.of("""
                         {"name":"Bovina","internalCode":"BVL-26-985731","sex":"FEMALE","status":"ACTIVE","registrationCategory":"UNREGISTERED","birthDate":"not-a-date"}
                         """)
-        );
+        ).map(arguments -> Arguments.of(withValidOrigin((String) arguments.get()[0])));
+    }
+
+    static Stream<Arguments> invalidOriginRequests() {
+        return Stream.of(
+                validRequest().replaceAll(
+                        ",\\s*\"origin\"\\s*:\\s*\\{[^}]+\\}",
+                        ""
+                ),
+                validRequest().replace("\"creatorName\": \"Ana Silva\"", "\"creatorName\": \"   \""),
+                validRequest().replace("\"originFarmName\": \"Fazenda Boa Vista\"", "\"originFarmName\": \" \""),
+                validRequest().replace("\"originFarmId\": null", "\"originFarmId\": 0"),
+                validRequest().replace("Ana Silva", "A".repeat(256)),
+                validRequest().replace("Fazenda Boa Vista", "F".repeat(256))
+        ).map(Arguments::of);
+    }
+
+    private static String withValidOrigin(String body) {
+        int closingBrace = body.lastIndexOf('}');
+        return body.substring(0, closingBrace)
+                + ",\"origin\":{\"creatorName\":\"Ana Silva\",\"originFarmName\":\"Fazenda Boa Vista\",\"originFarmId\":null}"
+                + body.substring(closingBrace);
     }
 
     private static String validRequest() {
@@ -259,7 +312,8 @@ class CreateBovineControllerHttpTest {
                   "fatherId": null,
                   "motherId": null,
                   "fatherRegistrationNumber": null,
-                  "motherRegistrationNumber": null
+                  "motherRegistrationNumber": null,
+                  "origin": {"creatorName": "Ana Silva", "originFarmName": "Fazenda Boa Vista", "originFarmId": null}
                 }
                 """;
     }

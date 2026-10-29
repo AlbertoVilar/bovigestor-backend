@@ -4,6 +4,7 @@ import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -75,6 +76,9 @@ public class BovineJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Embedded
+    private BovineOriginEmbeddable origin;
+
     protected BovineJpaEntity() {
     }
 
@@ -96,7 +100,8 @@ public class BovineJpaEntity {
             String fatherRegistrationNumber,
             String motherRegistrationNumber,
             Instant createdAt,
-            Instant updatedAt
+            Instant updatedAt,
+            BovineOriginEmbeddable origin
     ) {
         this.id = id;
         this.internalCode = internalCode;
@@ -116,6 +121,7 @@ public class BovineJpaEntity {
         this.motherRegistrationNumber = motherRegistrationNumber;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.origin = origin;
     }
 
     public Long getId() {
@@ -188,5 +194,9 @@ public class BovineJpaEntity {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public BovineOriginEmbeddable getOrigin() {
+        return origin;
     }
 }
