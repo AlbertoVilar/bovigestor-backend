@@ -4,6 +4,7 @@ import com.bovigestor.adapter.out.persistence.entity.BovineJpaEntity;
 import com.bovigestor.domain.model.Bovine;
 import com.bovigestor.domain.model.BovineId;
 import com.bovigestor.domain.model.BovineInternalCode;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineRegistrationData;
 import com.bovigestor.domain.model.BovineSex;
@@ -57,7 +58,8 @@ class JpaSaveBovineAdapterTest {
                         "EXT-F-3001",
                         "EXT-M-3001"
                 ),
-                createdAt
+                createdAt,
+                testOrigin()
         );
 
         adapter.save(bovine);
@@ -88,7 +90,41 @@ class JpaSaveBovineAdapterTest {
                 () -> assertEquals("EXT-F-3001", savedBovine.getFatherRegistrationNumber()),
                 () -> assertEquals("EXT-M-3001", savedBovine.getMotherRegistrationNumber()),
                 () -> assertEquals(createdAt, savedBovine.getCreatedAt()),
-                () -> assertEquals(createdAt, savedBovine.getUpdatedAt())
+                () -> assertEquals(createdAt, savedBovine.getUpdatedAt()),
+                () -> assertEquals("Criador de teste", savedBovine.getOrigin().getCreatorName()),
+                () -> assertEquals("Fazenda de teste", savedBovine.getOrigin().getOriginFarmName()),
+                () -> assertNull(savedBovine.getOrigin().getOriginFarmId())
         );
+    }
+
+    @Test
+    @Transactional
+    void shouldPersistOriginNamesAtMaximumColumnLength() {
+        String creatorName = "C".repeat(255);
+        String originFarmName = "F".repeat(255);
+        Bovine bovine = Bovine.createManually(
+                new BovineId(3_100_002L),
+                new BovineInternalCode("BVL-26-3002"),
+                new BovineRegistrationData(
+                        "Novilha", BovineSex.FEMALE, null, null, null, BovineStatus.ACTIVE,
+                        null, null, null, BovineRegistrationCategory.UNREGISTERED,
+                        null, null, null, null
+                ),
+                Instant.parse("2026-10-14T12:00:00Z"),
+                new BovineOrigin(creatorName, originFarmName, null)
+        );
+
+        adapter.save(bovine);
+        entityManager.flush();
+        entityManager.clear();
+
+        BovineJpaEntity savedBovine = entityManager.find(BovineJpaEntity.class, 3_100_002L);
+        assertNotNull(savedBovine);
+        assertEquals(creatorName, savedBovine.getOrigin().getCreatorName());
+        assertEquals(originFarmName, savedBovine.getOrigin().getOriginFarmName());
+    }
+
+    private static BovineOrigin testOrigin() {
+        return new BovineOrigin("Criador de teste", "Fazenda de teste", null);
     }
 }

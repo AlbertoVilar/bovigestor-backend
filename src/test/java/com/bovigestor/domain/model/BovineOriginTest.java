@@ -94,6 +94,39 @@ class BovineOriginTest {
     }
 
     @Test
+    void shouldRejectCreatorNameLongerThan255Characters() {
+        assertThatThrownBy(() -> new BovineOrigin(
+                "C".repeat(256),
+                "Fazenda Santa Rita",
+                null
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("O nome do criador deve conter no máximo 255 caracteres");
+    }
+
+    @Test
+    void shouldRejectOriginFarmNameLongerThan255Characters() {
+        assertThatThrownBy(() -> new BovineOrigin(
+                "José Pereira",
+                "F".repeat(256),
+                null
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("O nome da fazenda de origem deve conter no máximo 255 caracteres");
+    }
+
+    @Test
+    void shouldAcceptNamesAtMaximumLength() {
+        String creatorName = "C".repeat(255);
+        String originFarmName = "F".repeat(255);
+
+        BovineOrigin origin = new BovineOrigin(creatorName, originFarmName, null);
+
+        assertThat(origin.creatorName()).hasSize(255);
+        assertThat(origin.originFarmName()).hasSize(255);
+    }
+
+    @Test
     void shouldBeEqualWhenOriginsHaveSameValues() {
         BovineOrigin origin1 = new BovineOrigin(
                 "José Pereira",

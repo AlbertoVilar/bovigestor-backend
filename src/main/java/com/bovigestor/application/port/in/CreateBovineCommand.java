@@ -1,6 +1,7 @@
 package com.bovigestor.application.port.in;
 
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
@@ -23,13 +24,15 @@ public record CreateBovineCommand(
         BovineId fatherId,
         BovineId motherId,
         String fatherRegistrationNumber,
-        String motherRegistrationNumber
+        String motherRegistrationNumber,
+        BovineOrigin origin
 ) {
     public CreateBovineCommand {
         Objects.requireNonNull(name, "O nome do bovino é obrigatório");
         Objects.requireNonNull(internalCode, "O código interno do bovino é obrigatório");
         Objects.requireNonNull(sex, "O sexo do bovino é obrigatório");
         Objects.requireNonNull(status, "O status do bovino é obrigatório");
+        Objects.requireNonNull(origin, "A origem do bovino é obrigatória");
 
         if (name.isBlank()) {
             throw new IllegalArgumentException(

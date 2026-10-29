@@ -4,10 +4,12 @@ import com.bovigestor.adapter.out.persistence.entity.BovineJpaEntity;
 import com.bovigestor.domain.model.Bovine;
 import com.bovigestor.domain.model.BovineId;
 import com.bovigestor.domain.model.BovineInternalCode;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineRegistrationData;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
+import com.bovigestor.domain.model.FarmId;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -40,7 +42,8 @@ class BovineJpaMapperTest {
                         null,
                         null
                 ),
-                createdAt
+                createdAt,
+                testOrigin()
         );
 
         BovineJpaEntity entity = BovineJpaMapper.toEntity(bovine);
@@ -86,7 +89,8 @@ class BovineJpaMapperTest {
                         null,
                         null
                 ),
-                Instant.parse("2026-06-01T12:00:00Z")
+                Instant.parse("2026-06-01T12:00:00Z"),
+                testOrigin()
         );
 
         BovineJpaEntity entity = BovineJpaMapper.toEntity(bovine);
@@ -97,6 +101,28 @@ class BovineJpaMapperTest {
         assertThat(entity.getRegistrationAssociation()).isNull();
         assertThat(entity.getFatherRegistrationNumber()).isNull();
         assertThat(entity.getMotherRegistrationNumber()).isNull();
+        assertThat(entity.getOrigin().getCreatorName()).isEqualTo("Criador de teste");
+        assertThat(entity.getOrigin().getOriginFarmName()).isEqualTo("Fazenda de teste");
+        assertThat(entity.getOrigin().getOriginFarmId()).isNull();
+    }
+
+    @Test
+    void shouldMapLocalOriginFarmIdToDatabaseIdentifier() {
+        Bovine bovine = Bovine.createManually(
+                new BovineId(44L),
+                new BovineInternalCode("BVL-26-0044"),
+                new BovineRegistrationData(
+                        "Novilha", BovineSex.FEMALE, null, null, null, BovineStatus.ACTIVE,
+                        null, null, null, BovineRegistrationCategory.UNREGISTERED,
+                        null, null, null, null
+                ),
+                Instant.parse("2026-06-01T12:00:00Z"),
+                new BovineOrigin("Criador local", "Fazenda local", new FarmId(15L))
+        );
+
+        BovineJpaEntity entity = BovineJpaMapper.toEntity(bovine);
+
+        assertThat(entity.getOrigin().getOriginFarmId()).isEqualTo(15L);
     }
 
     @Test
@@ -104,5 +130,9 @@ class BovineJpaMapperTest {
         assertThatNullPointerException()
                 .isThrownBy(() -> BovineJpaMapper.toEntity(null))
                 .withMessage("O bovino é obrigatório");
+    }
+
+    private static BovineOrigin testOrigin() {
+        return new BovineOrigin("Criador de teste", "Fazenda de teste", null);
     }
 }

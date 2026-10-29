@@ -3,9 +3,11 @@ package com.bovigestor.adapter.in.web.mapper;
 import com.bovigestor.adapter.in.web.dto.BovineRequest;
 import com.bovigestor.application.port.in.CreateBovineCommand;
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
+import com.bovigestor.domain.model.FarmId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -34,7 +36,8 @@ class BovineWebMapperTest {
                 120L,
                 121L,
                 null,
-                null
+                null,
+                new BovineRequest.OriginRequest("Ana Silva", "Fazenda Boa Vista", 15L)
         );
 
         CreateBovineCommand command = BovineWebMapper.toCommand(request);
@@ -54,7 +57,8 @@ class BovineWebMapperTest {
                 new BovineId(120L),
                 new BovineId(121L),
                 null,
-                null
+                null,
+                new BovineOrigin("Ana Silva", "Fazenda Boa Vista", new FarmId(15L))
         ));
     }
 
@@ -75,7 +79,8 @@ class BovineWebMapperTest {
                 null,
                 null,
                 "EXT-F-985732",
-                "EXT-M-985732"
+                "EXT-M-985732",
+                new BovineRequest.OriginRequest("José Pereira", "Fazenda Santa Rita", null)
         );
 
         CreateBovineCommand command = BovineWebMapper.toCommand(request);
@@ -88,6 +93,9 @@ class BovineWebMapperTest {
         assertThat(command.coatColor()).isNull();
         assertThat(command.birthDate()).isNull();
         assertThat(command.earTag()).isNull();
+        assertThat(command.origin()).isEqualTo(
+                new BovineOrigin("José Pereira", "Fazenda Santa Rita", null)
+        );
     }
 
     @Test
@@ -95,6 +103,32 @@ class BovineWebMapperTest {
         assertThatThrownBy(() -> BovineWebMapper.toCommand(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("A solicitação de criação do bovino é obrigatória");
+    }
+
+    @Test
+    void shouldRejectNullOriginRequest() {
+        BovineRequest request = new BovineRequest(
+                "Bovina sem origem",
+                "BVL-26-985734",
+                BovineSex.FEMALE,
+                null,
+                null,
+                null,
+                BovineStatus.ACTIVE,
+                null,
+                null,
+                null,
+                BovineRegistrationCategory.UNREGISTERED,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> BovineWebMapper.toCommand(request))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("A origem do bovino é obrigatória");
     }
 
     @ParameterizedTest
@@ -133,7 +167,8 @@ class BovineWebMapperTest {
                 fatherId,
                 motherId,
                 null,
-                null
+                null,
+                new BovineRequest.OriginRequest("Criador teste", "Fazenda teste", null)
         );
     }
 }

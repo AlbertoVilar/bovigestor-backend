@@ -45,7 +45,8 @@ public class CreateBovineService implements CreateBovineUseCase {
                 bovineId,
                 internalCode,
                 toRegistrationData(command),
-                clock.instant()
+                clock.instant(),
+                command.origin()
         );
         saveBovinePort.save(newBovine);
         return bovineId;
