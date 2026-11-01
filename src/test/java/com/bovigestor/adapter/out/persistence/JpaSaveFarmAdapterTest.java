@@ -12,6 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +40,7 @@ class JpaSaveFarmAdapterTest {
                 id,
                 "Fazenda Boa Vista",
                 "BVL",
+                ZoneId.of("America/Sao_Paulo"),
                 createdAt
         );
         // Act
@@ -55,6 +57,7 @@ class JpaSaveFarmAdapterTest {
                 () -> assertEquals(id.value(), savedFarm.getId()),
                 () -> assertEquals("Fazenda Boa Vista", savedFarm.getName()),
                 () -> assertEquals("BVL", savedFarm.getCodeSeries()),
+                () -> assertEquals("America/Sao_Paulo", savedFarm.getTimeZone()),
                 () -> assertEquals(FarmStatus.ACTIVE, savedFarm.getStatus()),
                 () -> assertEquals(createdAt, savedFarm.getCreatedAt()),
                 () -> assertEquals(createdAt, savedFarm.getUpdatedAt())

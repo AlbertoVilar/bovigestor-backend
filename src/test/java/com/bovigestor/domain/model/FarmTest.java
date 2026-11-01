@@ -1,6 +1,7 @@
 package com.bovigestor.domain.model;
 
 import java.time.Instant;
+import java.time.ZoneId;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -13,6 +14,7 @@ class FarmTest {
 
     private static final FarmId FARM_ID = new FarmId(1L);
     private static final Instant CREATED_AT = Instant.parse("2026-01-01T10:00:00Z");
+    private static final ZoneId TIME_ZONE = ZoneId.of("America/Sao_Paulo");
 
     @Test
     void shouldCreateFarmWithActiveStatusAndInitialTimestamps() {
@@ -21,6 +23,7 @@ class FarmTest {
         assertThat(farm.id()).isEqualTo(FARM_ID);
         assertThat(farm.name()).isEqualTo("Fazenda Boa Vista");
         assertThat(farm.codeSeries()).isEqualTo("BVL");
+        assertThat(farm.timeZone()).isEqualTo(TIME_ZONE);
         assertThat(farm.status()).isEqualTo(FarmStatus.ACTIVE);
         assertThat(farm.createdAt()).isEqualTo(CREATED_AT);
         assertThat(farm.updatedAt()).isEqualTo(CREATED_AT);
@@ -28,14 +31,18 @@ class FarmTest {
 
     @Test
     void shouldRejectNullFarmId() {
-        assertThatThrownBy(() -> Farm.create(null, "Fazenda Boa Vista", "BVL", CREATED_AT))
+        assertThatThrownBy(() -> Farm.create(
+                null, "Fazenda Boa Vista", "BVL", TIME_ZONE, CREATED_AT
+        ))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("O identificador da fazenda é obrigatório");
     }
 
     @Test
     void shouldRejectNullName() {
-        assertThatThrownBy(() -> Farm.create(FARM_ID, null, "BVL", CREATED_AT))
+        assertThatThrownBy(() -> Farm.create(
+                FARM_ID, null, "BVL", TIME_ZONE, CREATED_AT
+        ))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("O nome da fazenda é obrigatório");
     }
@@ -43,14 +50,18 @@ class FarmTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "   "})
     void shouldRejectBlankName(String name) {
-        assertThatThrownBy(() -> Farm.create(FARM_ID, name, "BVL", CREATED_AT))
+        assertThatThrownBy(() -> Farm.create(
+                FARM_ID, name, "BVL", TIME_ZONE, CREATED_AT
+        ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("O nome da fazenda não pode estar vazio ou conter somente espaços");
     }
 
     @Test
     void shouldRejectNullCodeSeries() {
-        assertThatThrownBy(() -> Farm.create(FARM_ID, "Fazenda Boa Vista", null, CREATED_AT))
+        assertThatThrownBy(() -> Farm.create(
+                FARM_ID, "Fazenda Boa Vista", null, TIME_ZONE, CREATED_AT
+        ))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("A série da fazenda é obrigatória");
     }
@@ -58,23 +69,40 @@ class FarmTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "   ", "bv", "BVL01", "ABCDE"})
     void shouldRejectInvalidCodeSeries(String codeSeries) {
-        assertThatThrownBy(() -> Farm.create(FARM_ID, "Fazenda Boa Vista", codeSeries, CREATED_AT))
+        assertThatThrownBy(() -> Farm.create(
+                FARM_ID, "Fazenda Boa Vista", codeSeries, TIME_ZONE, CREATED_AT
+        ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("A série da fazenda deve conter três ou quatro letras maiúsculas");
     }
 
     @Test
     void shouldAcceptFourLetterCodeSeries() {
-        Farm farm = Farm.create(FARM_ID, "Fazenda Boa Vista", "BOAS", CREATED_AT);
+        Farm farm = Farm.create(FARM_ID, "Fazenda Boa Vista", "BOAS", TIME_ZONE, CREATED_AT);
 
         assertThat(farm.codeSeries()).isEqualTo("BOAS");
     }
 
     @Test
     void shouldRejectNullCreatedAt() {
-        assertThatThrownBy(() -> Farm.create(FARM_ID, "Fazenda Boa Vista", "BVL", null))
+        assertThatThrownBy(() -> Farm.create(
+                FARM_ID, "Fazenda Boa Vista", "BVL", TIME_ZONE, null
+        ))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("A data de criação é obrigatória");
+    }
+
+    @Test
+    void shouldRejectNullTimeZone() {
+        assertThatThrownBy(() -> Farm.create(
+                FARM_ID,
+                "Fazenda Boa Vista",
+                "BVL",
+                null,
+                CREATED_AT
+        ))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("O fuso horário da fazenda é obrigatório");
     }
 
     @Test
@@ -172,6 +200,6 @@ class FarmTest {
     }
 
     private static Farm createFarm() {
-        return Farm.create(FARM_ID, "Fazenda Boa Vista", "BVL", CREATED_AT);
+        return Farm.create(FARM_ID, "Fazenda Boa Vista", "BVL", TIME_ZONE, CREATED_AT);
     }
 }

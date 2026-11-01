@@ -27,6 +27,14 @@ public record FarmRequest(
                 regexp = "[A-Z]{3,4}",
                 message = "A série da fazenda deve conter três ou quatro letras maiúsculas"
         )
-        String codeSeries
+        String codeSeries,
+
+        @Schema(
+                description = "Identificador de fuso horário IANA da fazenda.",
+                example = "America/Sao_Paulo",
+                requiredMode = Schema.RequiredMode.REQUIRED
+        )
+        @NotBlank(message = "O fuso horário da fazenda é obrigatório")
+        String timeZone
 ) {
 }

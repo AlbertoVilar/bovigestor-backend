@@ -17,6 +17,7 @@ public final class FarmJpaMapper {
                 farm.id().value(),
                 farm.name(),
                 farm.codeSeries(),
+                farm.timeZone().getId(),
                 farm.status(),
                 farm.createdAt(),
                 farm.updatedAt()

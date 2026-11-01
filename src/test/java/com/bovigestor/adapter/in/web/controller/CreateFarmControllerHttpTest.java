@@ -28,6 +28,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.ZoneId;
+
 @WebMvcTest(CreateFarmController.class)
 @Import(FarmWebExceptionHandler.class)
 class CreateFarmControllerHttpTest {
@@ -48,7 +50,7 @@ class CreateFarmControllerHttpTest {
         MvcResult result = mockMvc.perform(post(FARMS_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Fazenda Boa Vista","codeSeries":"BVL"}
+                                {"name":"Fazenda Boa Vista","codeSeries":"BVL","timeZone":"America/Sao_Paulo"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -63,6 +65,7 @@ class CreateFarmControllerHttpTest {
         verify(createFarmUseCase).create(commandCaptor.capture());
         assertThat(commandCaptor.getValue().name()).isEqualTo("Fazenda Boa Vista");
         assertThat(commandCaptor.getValue().codeSeries()).isEqualTo("BVL");
+        assertThat(commandCaptor.getValue().timeZone()).isEqualTo(ZoneId.of("America/Sao_Paulo"));
     }
 
     @ParameterizedTest
@@ -79,7 +82,7 @@ class CreateFarmControllerHttpTest {
     @Test
     void shouldRejectFarmNameLongerThan255CharactersWithBadRequest() throws Exception {
         String requestBody = "{\"name\":\"" + "a".repeat(256)
-                + "\",\"codeSeries\":\"BVL\"}";
+                + "\",\"codeSeries\":\"BVL\",\"timeZone\":\"America/Sao_Paulo\"}";
 
         mockMvc.perform(post(FARMS_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -119,16 +122,21 @@ class CreateFarmControllerHttpTest {
 
     static Stream<Arguments> invalidFarmRequests() {
         return Stream.of(
-                Arguments.of("{\"codeSeries\":\"BVL\"}"),
-                Arguments.of("{\"name\":null,\"codeSeries\":\"BVL\"}"),
-                Arguments.of("{\"name\":\"   \",\"codeSeries\":\"BVL\"}"),
-                Arguments.of("{\"name\":\"Fazenda\"}"),
-                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":null}"),
-                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"  \"}"),
-                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"bvl\"}"),
-                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"AB\"}"),
-                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"ABCDE\"}"),
-                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"AB1\"}")
+                Arguments.of("{\"codeSeries\":\"BVL\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":null,\"codeSeries\":\"BVL\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"   \",\"codeSeries\":\"BVL\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":null,\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"  \",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"bvl\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"AB\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"ABCDE\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"AB1\",\"timeZone\":\"America/Sao_Paulo\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"BVL\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"BVL\",\"timeZone\":null}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"BVL\",\"timeZone\":\"\"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"BVL\",\"timeZone\":\"   \"}"),
+                Arguments.of("{\"name\":\"Fazenda\",\"codeSeries\":\"BVL\",\"timeZone\":\"Invalid/Zone\"}")
         );
     }
 
@@ -169,7 +177,7 @@ class CreateFarmControllerHttpTest {
         MvcResult result = mockMvc.perform(post(FARMS_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Fazenda Boa Vista","codeSeries":"BVL"}
+                                {"name":"Fazenda Boa Vista","codeSeries":"BVL","timeZone":"America/Sao_Paulo"}
                                 """))
                 .andExpect(status().isInternalServerError())
                 .andReturn();

@@ -24,6 +24,9 @@ public class FarmJpaEntity {
     @Column(name = "code_series", nullable = false, length = 4, unique = true)
     private String codeSeries;
 
+    @Column(name = "time_zone", length = 255)
+    private String timeZone;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private FarmStatus status;
@@ -41,6 +44,7 @@ public class FarmJpaEntity {
             Long id,
             String name,
             String codeSeries,
+            String timeZone,
             FarmStatus status,
             Instant createdAt,
             Instant updatedAt
@@ -48,6 +52,7 @@ public class FarmJpaEntity {
         this.id = id;
         this.name = name;
         this.codeSeries = codeSeries;
+        this.timeZone = timeZone;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -63,6 +68,10 @@ public class FarmJpaEntity {
 
     public String getCodeSeries() {
         return codeSeries;
+    }
+
+    public String getTimeZone() {
+        return timeZone;
     }
 
     public FarmStatus getStatus() {

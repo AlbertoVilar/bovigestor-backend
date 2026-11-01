@@ -1,6 +1,7 @@
 package com.bovigestor.domain.model;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Objects;
 
 public class Farm {
@@ -8,6 +9,7 @@ public class Farm {
     private final FarmId id;
     private String name;
     private String codeSeries;
+    private final ZoneId timeZone;
     private FarmStatus status;
     private final Instant createdAt;
     private Instant updatedAt;
@@ -16,12 +18,17 @@ public class Farm {
             FarmId id,
             String name,
             String codeSeries,
+            ZoneId timeZone,
             FarmStatus status,
             Instant createdAt
     ) {
         this.id = Objects.requireNonNull(id, "O identificador da fazenda é obrigatório");
         this.name = validateName(name);
         this.codeSeries = validateCodeSeries(codeSeries);
+        this.timeZone = Objects.requireNonNull(
+                timeZone,
+                "O fuso horário da fazenda é obrigatório"
+        );
         this.status = Objects.requireNonNull(status, "O status da fazenda é obrigatório");
         this.createdAt = Objects.requireNonNull(createdAt, "A data de criação é obrigatória");
         this.updatedAt = createdAt;
@@ -31,9 +38,10 @@ public class Farm {
             FarmId id,
             String name,
             String codeSeries,
+            ZoneId timeZone,
             Instant createdAt
     ) {
-        return new Farm(id, name, codeSeries, FarmStatus.ACTIVE, createdAt);
+        return new Farm(id, name, codeSeries, timeZone, FarmStatus.ACTIVE, createdAt);
     }
 
     public void activate(Instant occurredAt) {
@@ -62,6 +70,10 @@ public class Farm {
 
     public String codeSeries() {
         return codeSeries;
+    }
+
+    public ZoneId timeZone() {
+        return timeZone;
     }
 
     public FarmStatus status() {

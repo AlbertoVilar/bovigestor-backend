@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
+import java.time.ZoneId;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -51,7 +52,8 @@ class CreateFarmTransactionRollbackIntegrationTest {
         );
         CreateFarmCommand command = new CreateFarmCommand(
                 "Fazenda Rollback",
-                createUnusedCodeSeries()
+                createUnusedCodeSeries(),
+                ZoneId.of("America/Sao_Paulo")
         );
         AtomicReference<FarmId> createdId = new AtomicReference<>();
 
