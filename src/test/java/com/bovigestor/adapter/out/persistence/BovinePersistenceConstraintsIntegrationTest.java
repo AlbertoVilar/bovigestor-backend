@@ -1,6 +1,7 @@
 package com.bovigestor.adapter.out.persistence;
 
 import com.bovigestor.adapter.out.persistence.entity.BovineJpaEntity;
+import com.bovigestor.adapter.out.persistence.entity.BovineOriginEmbeddable;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
@@ -97,7 +98,8 @@ class BovinePersistenceConstraintsIntegrationTest {
                 null,
                 null,
                 now,
-                now
+                now,
+                new BovineOriginEmbeddable("Criador de teste", "Fazenda de teste", null)
         );
     }
 

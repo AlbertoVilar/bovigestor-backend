@@ -1,6 +1,7 @@
 package com.bovigestor.adapter.out.persistence.mapper;
 
 import com.bovigestor.adapter.out.persistence.entity.BovineJpaEntity;
+import com.bovigestor.adapter.out.persistence.entity.BovineOriginEmbeddable;
 import com.bovigestor.domain.model.Bovine;
 
 import java.util.Objects;
@@ -31,7 +32,14 @@ public final class BovineJpaMapper {
                 bovine.fatherRegistrationNumber(),
                 bovine.motherRegistrationNumber(),
                 bovine.createdAt(),
-                bovine.updatedAt()
+                bovine.updatedAt(),
+                new BovineOriginEmbeddable(
+                        bovine.origin().creatorName(),
+                        bovine.origin().originFarmName(),
+                        bovine.origin().originFarmId() == null
+                                ? null
+                                : bovine.origin().originFarmId().value()
+                )
         );
     }
 }

@@ -4,6 +4,7 @@ import com.bovigestor.adapter.out.persistence.entity.BovineJpaEntity;
 import com.bovigestor.application.port.in.CreateBovineCommand;
 import com.bovigestor.application.port.in.CreateBovineUseCase;
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
@@ -54,7 +55,8 @@ class CreateBovineTransactionRollbackIntegrationTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                testOrigin()
         );
         AtomicReference<BovineId> createdId = new AtomicReference<>();
 
@@ -87,5 +89,9 @@ class CreateBovineTransactionRollbackIntegrationTest {
     private String createInternalCode() {
         long sequence = ThreadLocalRandom.current().nextLong(1, 100_000_000L);
         return "TST-26-%08d".formatted(sequence);
+    }
+
+    private static BovineOrigin testOrigin() {
+        return new BovineOrigin("Criador de teste", "Fazenda de teste", null);
     }
 }

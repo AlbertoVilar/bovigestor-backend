@@ -68,7 +68,7 @@ class CreateBovineHttpPostgresIntegrationTest {
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion().getVersion())
                 .toList())
-                .containsExactly("1", "2");
+                .containsExactly("1", "2", "3");
         assertThat(jdbcTemplate.queryForObject("SELECT version()", String.class))
                 .startsWith("PostgreSQL 17");
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM bovine", Integer.class))
@@ -92,7 +92,8 @@ class CreateBovineHttpPostgresIntegrationTest {
                 "SELECT id, internal_code, name, sex, breed, coat_color, birth_date, status, "
                         + "ear_tag, registration_number, registration_association, registration_category, "
                         + "father_id, mother_id, father_registration_number, mother_registration_number, "
-                        + "created_at, updated_at FROM bovine WHERE id = ?",
+                        + "created_at, updated_at, origin_creator_name, origin_farm_name, origin_farm_id "
+                        + "FROM bovine WHERE id = ?",
                 id
         );
         assertThat(saved)
@@ -112,6 +113,10 @@ class CreateBovineHttpPostgresIntegrationTest {
                 .containsEntry("mother_id", null)
                 .containsEntry("father_registration_number", null)
                 .containsEntry("mother_registration_number", null);
+        assertThat(saved)
+                .containsEntry("origin_creator_name", "Ana Silva")
+                .containsEntry("origin_farm_name", "Fazenda Boa Vista")
+                .containsEntry("origin_farm_id", null);
         assertThat(saved.get("created_at")).isInstanceOf(java.sql.Timestamp.class);
         assertThat(((java.sql.Timestamp) saved.get("created_at")).toInstant()).isNotNull();
         assertThat(saved.get("updated_at")).isEqualTo(saved.get("created_at"));
@@ -189,7 +194,8 @@ class CreateBovineHttpPostgresIntegrationTest {
                   "fatherId": null,
                   "motherId": null,
                   "fatherRegistrationNumber": null,
-                  "motherRegistrationNumber": null
+                  "motherRegistrationNumber": null,
+                  "origin": {"creatorName": "Ana Silva", "originFarmName": "Fazenda Boa Vista", "originFarmId": null}
                 }
                 """.formatted(internalCode, sequence);
     }

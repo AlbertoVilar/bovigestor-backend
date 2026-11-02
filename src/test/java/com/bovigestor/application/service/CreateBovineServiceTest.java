@@ -5,6 +5,7 @@ import com.bovigestor.application.port.out.BovineIdGenerationPort;
 import com.bovigestor.application.port.out.SaveBovinePort;
 import com.bovigestor.domain.model.Bovine;
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
@@ -25,6 +26,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CreateBovineServiceTest {
+
+    private static final BovineOrigin BOVINE_ORIGIN = new BovineOrigin(
+            "Criador de teste",
+            "Fazenda de teste",
+            null
+    );
 
     private static final Clock CLOCK = Clock.fixed(
             Instant.parse("2026-06-01T12:00:00Z"),
@@ -50,7 +57,10 @@ class CreateBovineServiceTest {
         // Assert
         assertThat(createdId).isEqualTo(expectedId);
         verify(idGenerationPort).nextId();
-        verify(saveBovinePort).save(any(Bovine.class));
+        org.mockito.ArgumentCaptor<Bovine> bovineCaptor =
+                org.mockito.ArgumentCaptor.forClass(Bovine.class);
+        verify(saveBovinePort).save(bovineCaptor.capture());
+        assertThat(bovineCaptor.getValue().origin()).isSameAs(BOVINE_ORIGIN);
     }
 
     @Test
@@ -195,7 +205,8 @@ class CreateBovineServiceTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                BOVINE_ORIGIN
         );
     }
 }

@@ -1,13 +1,17 @@
 package com.bovigestor.adapter.out.persistence;
 
 import com.bovigestor.adapter.out.persistence.entity.BovineJpaEntity;
+import com.bovigestor.adapter.out.persistence.entity.FarmJpaEntity;
 import com.bovigestor.application.port.in.CreateBovineCommand;
 import com.bovigestor.application.port.in.CreateBovineUseCase;
 import com.bovigestor.application.port.out.BovineIdGenerationPort;
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
+import com.bovigestor.domain.model.FarmId;
+import com.bovigestor.domain.model.FarmStatus;
 import jakarta.persistence.EntityManager;
 import org.flywaydb.core.Flyway;
 import org.postgresql.util.PSQLException;
@@ -84,7 +88,7 @@ class BovinePostgresPersistenceIntegrationTest {
     }
 
     @Test
-    void shouldApplyV1AndV2ToCleanPostgresAndValidateHibernateMapping() {
+    void shouldApplyV1V2AndV3ToCleanPostgresAndValidateHibernateMapping() {
         String serverVersion = jdbcTemplate.queryForObject("SELECT version()", String.class);
         String mappedPort = Integer.toString(POSTGRES.getMappedPort(5432));
         System.out.printf(
@@ -99,7 +103,7 @@ class BovinePostgresPersistenceIntegrationTest {
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion().getVersion())
                 .toList())
-                .containsExactly("1", "2");
+                .containsExactly("1", "2", "3");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT to_regclass('public.bovine') IS NOT NULL",
                 Boolean.class
@@ -112,7 +116,7 @@ class BovinePostgresPersistenceIntegrationTest {
                 "SELECT COUNT(*) FROM information_schema.columns "
                         + "WHERE table_schema = 'public' AND table_name = 'bovine'",
                 Integer.class
-        )).isEqualTo(18);
+        )).isEqualTo(21);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT data_type FROM information_schema.columns "
                         + "WHERE table_schema = 'public' AND table_name = 'bovine' "
@@ -153,7 +157,8 @@ class BovinePostgresPersistenceIntegrationTest {
                 null,
                 null,
                 "PG-EXT-F-1",
-                "PG-EXT-M-1"
+                "PG-EXT-M-1",
+                testOrigin()
         );
 
         BovineId createdId = createBovineUseCase.create(command);
@@ -181,6 +186,9 @@ class BovinePostgresPersistenceIntegrationTest {
         assertEquals(command.motherRegistrationNumber(), saved.getMotherRegistrationNumber());
         assertNotNull(saved.getCreatedAt());
         assertEquals(saved.getCreatedAt(), saved.getUpdatedAt());
+        assertEquals(command.origin().creatorName(), saved.getOrigin().getCreatorName());
+        assertEquals(command.origin().originFarmName(), saved.getOrigin().getOriginFarmName());
+        assertNull(saved.getOrigin().getOriginFarmId());
     }
 
     @Test
@@ -203,6 +211,44 @@ class BovinePostgresPersistenceIntegrationTest {
         assertNull(saved.getMotherId());
         assertNull(saved.getFatherRegistrationNumber());
         assertNull(saved.getMotherRegistrationNumber());
+        assertEquals("Criador de teste", saved.getOrigin().getCreatorName());
+        assertEquals("Fazenda de teste", saved.getOrigin().getOriginFarmName());
+        assertNull(saved.getOrigin().getOriginFarmId());
+    }
+
+    @Test
+    @Transactional
+    void shouldPersistOriginFarmIdWhenItReferencesAnExistingFarm() {
+        Instant now = Instant.parse("2026-10-19T12:00:00Z");
+        entityManager.persist(new FarmJpaEntity(
+                7_777L, "Fazenda de origem", "ORG", FarmStatus.ACTIVE, now, now
+        ));
+        CreateBovineCommand command = new CreateBovineCommand(
+                "Origin Farm Reference",
+                nextInternalCode(),
+                BovineSex.FEMALE,
+                null,
+                null,
+                null,
+                BovineStatus.ACTIVE,
+                null,
+                null,
+                null,
+                BovineRegistrationCategory.UNREGISTERED,
+                null,
+                null,
+                null,
+                null,
+                new BovineOrigin("Criador local", "Fazenda de origem", new FarmId(7_777L))
+        );
+
+        BovineId id = createBovineUseCase.create(command);
+        entityManager.flush();
+        entityManager.clear();
+
+        BovineJpaEntity saved = entityManager.find(BovineJpaEntity.class, id.value());
+        assertNotNull(saved);
+        assertEquals(7_777L, saved.getOrigin().getOriginFarmId());
     }
 
     @Test
@@ -223,7 +269,8 @@ class BovinePostgresPersistenceIntegrationTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                testOrigin()
         );
 
         BovineId createdId = createBovineUseCase.create(provisional);
@@ -260,7 +307,8 @@ class BovinePostgresPersistenceIntegrationTest {
                 fatherId,
                 motherId,
                 null,
-                null
+                null,
+                testOrigin()
         );
 
         BovineId childId = createBovineUseCase.create(child);
@@ -333,7 +381,11 @@ class BovinePostgresPersistenceIntegrationTest {
         assertPostgresConstraintViolation(
                 () -> insert(entityManager, values),
                 "23503",
-                parentColumn.equals("father_id") ? "fk_bovine_father" : "fk_bovine_mother"
+                switch (parentColumn) {
+                    case "father_id" -> "fk_bovine_father";
+                    case "mother_id" -> "fk_bovine_mother";
+                    default -> "fk_bovine_origin_farm";
+                }
         );
     }
 
@@ -401,12 +453,15 @@ class BovinePostgresPersistenceIntegrationTest {
             case "po-parentage-required", "pc-parentage-required" -> "ck_bovine_po_pc_parentage_required";
             case "father-self-reference" -> "ck_bovine_father_not_self";
             case "mother-self-reference" -> "ck_bovine_mother_not_self";
+            case "blank-origin-creator-name" -> "ck_bovine_origin_creator_name_not_blank";
+            case "blank-origin-farm-name" -> "ck_bovine_origin_farm_name_not_blank";
+            case "non-positive-origin-farm-id" -> "ck_bovine_origin_farm_id_positive";
             default -> throw new IllegalArgumentException("Unknown CHECK scenario: " + scenario);
         };
     }
 
     private static java.util.stream.Stream<String> parentForeignKeyColumns() {
-        return java.util.stream.Stream.of("father_id", "mother_id");
+        return java.util.stream.Stream.of("father_id", "mother_id", "origin_farm_id");
     }
 
     private CreateBovineCommand unregisteredCommand(String name) {
@@ -425,8 +480,13 @@ class BovinePostgresPersistenceIntegrationTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                testOrigin()
         );
+    }
+
+    private static BovineOrigin testOrigin() {
+        return new BovineOrigin("Criador de teste", "Fazenda de teste", null);
     }
 
     private String nextInternalCode() {

@@ -17,6 +17,31 @@ class BovineTest {
     private static final BovineInternalCode INTERNAL_CODE =
             new BovineInternalCode("BVL-26-0001");
     private static final Instant CREATED_AT = Instant.parse("2026-06-01T23:30:00Z");
+    private static final BovineOrigin BOVINE_ORIGIN = new BovineOrigin(
+            "Criador de teste",
+            "Fazenda de teste",
+            null
+    );
+
+    @Test
+    void shouldPreserveOriginAndExposeItThroughAccessor() {
+        Bovine bovine = createBovine(registrationData().build());
+
+        assertThat(bovine.origin()).isSameAs(BOVINE_ORIGIN);
+    }
+
+    @Test
+    void shouldRejectNullOrigin() {
+        assertThatThrownBy(() -> createBovine(
+                BOVINE_ID,
+                INTERNAL_CODE,
+                registrationData().build(),
+                CREATED_AT,
+                null
+        ))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("A origem do bovino é obrigatória");
+    }
 
     @Test
     void shouldCreatePaBovineWithoutParentReferences() {
@@ -275,7 +300,17 @@ class BovineTest {
             BovineRegistrationData data,
             Instant createdAt
     ) {
-        return Bovine.createManually(id, internalCode, data, createdAt);
+        return createBovine(id, internalCode, data, createdAt, BOVINE_ORIGIN);
+    }
+
+    private static Bovine createBovine(
+            BovineId id,
+            BovineInternalCode internalCode,
+            BovineRegistrationData data,
+            Instant createdAt,
+            BovineOrigin origin
+    ) {
+        return Bovine.createManually(id, internalCode, data, createdAt, origin);
     }
 
     private static RegistrationDataBuilder registeredData(BovineRegistrationCategory category) {

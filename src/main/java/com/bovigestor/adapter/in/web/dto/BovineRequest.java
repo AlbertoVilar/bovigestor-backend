@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
 
 import java.time.LocalDate;
 
@@ -82,6 +83,27 @@ public record BovineRequest(
 
         @Schema(description = "Número genealógico externo da mãe, quando não cadastrada localmente.", example = "EXT-M-985731")
         @Size(max = 255, message = "A referência externa da mãe deve conter no máximo 255 caracteres")
-        String motherRegistrationNumber
+        String motherRegistrationNumber,
+
+        @Schema(description = "Origem cadastral do bovino.", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotNull(message = "A origem do bovino é obrigatória")
+        @Valid
+        OriginRequest origin
 ) {
+    public record OriginRequest(
+            @Schema(description = "Nome informado do criador.", example = "José Pereira", requiredMode = Schema.RequiredMode.REQUIRED)
+            @NotBlank(message = "O nome do criador é obrigatório")
+            @Size(max = 255, message = "O nome do criador deve conter no máximo 255 caracteres")
+            String creatorName,
+
+            @Schema(description = "Nome informado da fazenda de origem.", example = "Fazenda Santa Rita", requiredMode = Schema.RequiredMode.REQUIRED)
+            @NotBlank(message = "O nome da fazenda de origem é obrigatório")
+            @Size(max = 255, message = "O nome da fazenda de origem deve conter no máximo 255 caracteres")
+            String originFarmName,
+
+            @Schema(description = "ID local da fazenda de origem, quando cadastrada.", example = "15")
+            @Positive(message = "O identificador da fazenda de origem deve ser positivo")
+            Long originFarmId
+    ) {
+    }
 }
