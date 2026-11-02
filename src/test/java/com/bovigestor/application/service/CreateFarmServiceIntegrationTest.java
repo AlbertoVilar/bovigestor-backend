@@ -16,6 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.ZoneId;
+
 @SpringBootTest
 @ActiveProfiles("test")
 class CreateFarmServiceIntegrationTest {
@@ -31,7 +33,8 @@ class CreateFarmServiceIntegrationTest {
         // Arrange
         CreateFarmCommand command = new CreateFarmCommand(
                 "Fazenda Santa Helena",
-                "FSH"
+                "FSH",
+                ZoneId.of("America/Sao_Paulo")
         );
 
         // Act
@@ -52,6 +55,7 @@ class CreateFarmServiceIntegrationTest {
                 () -> assertEquals(createdId.value(), savedFarm.getId()),
                 () -> assertEquals("Fazenda Santa Helena", savedFarm.getName()),
                 () -> assertEquals("FSH", savedFarm.getCodeSeries()),
+                () -> assertEquals("America/Sao_Paulo", savedFarm.getTimeZone()),
                 () -> assertEquals(FarmStatus.ACTIVE, savedFarm.getStatus()),
                 () -> assertNotNull(savedFarm.getCreatedAt()),
                 () -> assertEquals(savedFarm.getCreatedAt(), savedFarm.getUpdatedAt())

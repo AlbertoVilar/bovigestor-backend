@@ -43,7 +43,7 @@ class CreateFarmControllerIntegrationTest {
         MvcResult result = mockMvc.perform(post(FARMS_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Fazenda Integração HTTP","codeSeries":"HIT"}
+                                {"name":"Fazenda Integração HTTP","codeSeries":"HIT","timeZone":"America/Sao_Paulo"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -59,12 +59,17 @@ class CreateFarmControllerIntegrationTest {
                 "HIT"
         );
         assertThat(savedFarms).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT time_zone FROM farm WHERE code_series = ?",
+                String.class,
+                "HIT"
+        )).isEqualTo("America/Sao_Paulo");
     }
 
     @Test
     void shouldReturnConflictForDuplicateCodeSeriesWithoutDatabaseDetails() throws Exception {
         String requestBody = """
-                {"name":"Fazenda Original","codeSeries":"DUP"}
+                {"name":"Fazenda Original","codeSeries":"DUP","timeZone":"America/Sao_Paulo"}
                 """;
 
         mockMvc.perform(post(FARMS_ENDPOINT)
@@ -75,7 +80,7 @@ class CreateFarmControllerIntegrationTest {
         MvcResult duplicateResult = mockMvc.perform(post(FARMS_ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Outra Fazenda","codeSeries":"DUP"}
+                                {"name":"Outra Fazenda","codeSeries":"DUP","timeZone":"America/Sao_Paulo"}
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
@@ -104,5 +109,9 @@ class CreateFarmControllerIntegrationTest {
         assertThat(openApi.at("/paths/~1api~1v1~1farms/post/responses/400").isObject()).isTrue();
         assertThat(openApi.at("/paths/~1api~1v1~1farms/post/responses/409").isObject()).isTrue();
         assertThat(openApi.at("/paths/~1api~1v1~1farms/post/responses/500").isObject()).isTrue();
+        assertThat(openApi.at("/components/schemas/FarmRequest/properties/timeZone/example").asText())
+                .isEqualTo("America/Sao_Paulo");
+        assertThat(openApi.at("/components/schemas/FarmRequest/required").toString())
+                .contains("timeZone");
     }
 }

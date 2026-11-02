@@ -51,6 +51,7 @@ public class CreateFarmService implements CreateFarmUseCase {
                 id,
                 command.name(),
                 command.codeSeries(),
+                command.timeZone(),
                 clock.instant()
         );
 

@@ -88,7 +88,7 @@ class BovinePostgresPersistenceIntegrationTest {
     }
 
     @Test
-    void shouldApplyV1V2AndV3ToCleanPostgresAndValidateHibernateMapping() {
+    void shouldApplyV1ToV4ToCleanPostgresAndValidateHibernateMapping() {
         String serverVersion = jdbcTemplate.queryForObject("SELECT version()", String.class);
         String mappedPort = Integer.toString(POSTGRES.getMappedPort(5432));
         System.out.printf(
@@ -103,7 +103,7 @@ class BovinePostgresPersistenceIntegrationTest {
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion().getVersion())
                 .toList())
-                .containsExactly("1", "2", "3");
+                .containsExactly("1", "2", "3", "4");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT to_regclass('public.bovine') IS NOT NULL",
                 Boolean.class
@@ -221,7 +221,7 @@ class BovinePostgresPersistenceIntegrationTest {
     void shouldPersistOriginFarmIdWhenItReferencesAnExistingFarm() {
         Instant now = Instant.parse("2026-10-19T12:00:00Z");
         entityManager.persist(new FarmJpaEntity(
-                7_777L, "Fazenda de origem", "ORG", FarmStatus.ACTIVE, now, now
+                7_777L, "Fazenda de origem", "ORG", "America/Sao_Paulo", FarmStatus.ACTIVE, now, now
         ));
         CreateBovineCommand command = new CreateBovineCommand(
                 "Origin Farm Reference",

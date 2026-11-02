@@ -1,0 +1,2 @@
+ALTER TABLE farm
+    ADD COLUMN time_zone VARCHAR(255);

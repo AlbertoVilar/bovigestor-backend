@@ -68,7 +68,7 @@ class CreateBovineHttpPostgresIntegrationTest {
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion().getVersion())
                 .toList())
-                .containsExactly("1", "2", "3");
+                .containsExactly("1", "2", "3", "4");
         assertThat(jdbcTemplate.queryForObject("SELECT version()", String.class))
                 .startsWith("PostgreSQL 17");
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM bovine", Integer.class))
