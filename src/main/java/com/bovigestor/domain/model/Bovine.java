@@ -31,6 +31,7 @@ public class Bovine {
             BovineInternalCode internalCode,
             BovineRegistrationData data,
             Instant createdAt,
+            Instant updatedAt,
             BovineOrigin origin
     ) {
         this.id = Objects.requireNonNull(id, "O identificador do bovino é obrigatório");
@@ -65,7 +66,10 @@ public class Bovine {
         this.motherId = data.motherId();
         this.fatherRegistrationNumber = data.fatherRegistrationNumber();
         this.motherRegistrationNumber = data.motherRegistrationNumber();
-        this.updatedAt = createdAt;
+        this.updatedAt = Objects.requireNonNull(
+                updatedAt,
+                "A data de atualização é obrigatória"
+        );
 
         validateBirthDate(birthDate, createdAt);
         validateParentIds(id, fatherId, motherId);
@@ -90,7 +94,18 @@ public class Bovine {
             Instant createdAt,
             BovineOrigin origin
     ) {
-        return new Bovine(id, internalCode, data, createdAt, origin);
+        return new Bovine(id, internalCode, data, createdAt, createdAt, origin);
+    }
+
+    public static Bovine reconstitute(
+            BovineId id,
+            BovineInternalCode internalCode,
+            BovineRegistrationData data,
+            Instant createdAt,
+            Instant updatedAt,
+            BovineOrigin origin
+    ) {
+        return new Bovine(id, internalCode, data, createdAt, updatedAt, origin);
     }
 
     public BovineId id() {
