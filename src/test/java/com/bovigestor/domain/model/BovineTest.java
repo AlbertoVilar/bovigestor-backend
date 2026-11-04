@@ -31,6 +31,44 @@ class BovineTest {
     }
 
     @Test
+    void shouldReconstituteBovinePreservingItsOriginalTimestamps() {
+        Instant updatedAt = Instant.parse("2026-06-03T15:30:00Z");
+        BovineRegistrationData data = registrationData()
+                .withCategory(BovineRegistrationCategory.UNREGISTERED)
+                .withoutRegistrationDetails()
+                .build();
+
+        Bovine bovine = Bovine.reconstitute(
+                BOVINE_ID,
+                INTERNAL_CODE,
+                data,
+                CREATED_AT,
+                updatedAt,
+                BOVINE_ORIGIN
+        );
+
+        assertThat(bovine.id()).isEqualTo(BOVINE_ID);
+        assertThat(bovine.internalCode()).isEqualTo(INTERNAL_CODE);
+        assertThat(bovine.createdAt()).isEqualTo(CREATED_AT);
+        assertThat(bovine.updatedAt()).isEqualTo(updatedAt);
+        assertThat(bovine.origin()).isSameAs(BOVINE_ORIGIN);
+    }
+
+    @Test
+    void shouldRejectNullUpdatedAtWhenReconstitutingBovine() {
+        assertThatThrownBy(() -> Bovine.reconstitute(
+                BOVINE_ID,
+                INTERNAL_CODE,
+                registrationData().build(),
+                CREATED_AT,
+                null,
+                BOVINE_ORIGIN
+        ))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("A data de atualização é obrigatória");
+    }
+
+    @Test
     void shouldRejectNullOrigin() {
         assertThatThrownBy(() -> createBovine(
                 BOVINE_ID,
