@@ -1,9 +1,13 @@
 package com.bovigestor.config;
 
 import com.bovigestor.application.port.in.CreateFarmUseCase;
+import com.bovigestor.application.port.in.FindBovineByIdUseCase;
+import com.bovigestor.application.port.in.FindFarmByIdUseCase;
 import com.bovigestor.application.port.out.FarmIdGenerationPort;
+import com.bovigestor.application.port.out.FindFarmPort;
 import com.bovigestor.application.port.out.SaveFarmPort;
 import com.bovigestor.application.service.CreateFarmService;
+import com.bovigestor.application.service.FindFarmService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,5 +47,12 @@ public class FarmConfig {
         return command -> transactionTemplate.execute(
                 status -> service.create(command)
         );
+    }
+
+    @Bean
+    public FindFarmByIdUseCase findFarmByIdUseCase(
+            FindFarmPort findFarmPort
+    ) {
+        return new FindFarmService(findFarmPort);
     }
 }

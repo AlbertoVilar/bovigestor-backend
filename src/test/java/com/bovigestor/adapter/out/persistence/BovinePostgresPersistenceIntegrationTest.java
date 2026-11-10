@@ -3,15 +3,19 @@ package com.bovigestor.adapter.out.persistence;
 import com.bovigestor.adapter.out.persistence.entity.BovineJpaEntity;
 import com.bovigestor.adapter.out.persistence.entity.FarmJpaEntity;
 import com.bovigestor.application.port.in.CreateBovineCommand;
-import com.bovigestor.application.port.in.CreateBovineUseCase;
 import com.bovigestor.application.port.out.BovineIdGenerationPort;
+import com.bovigestor.application.port.out.SaveBovinePort;
+import com.bovigestor.domain.model.Bovine;
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineInternalCode;
 import com.bovigestor.domain.model.BovineOrigin;
+import com.bovigestor.domain.model.BovineRegistrationData;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
 import com.bovigestor.domain.model.FarmId;
 import com.bovigestor.domain.model.FarmStatus;
+import com.bovigestor.testconfig.TestDatabaseIsolationPolicy;
 import jakarta.persistence.EntityManager;
 import org.flywaydb.core.Flyway;
 import org.postgresql.util.PSQLException;
@@ -74,13 +78,16 @@ class BovinePostgresPersistenceIntegrationTest {
     private BovineIdGenerationPort bovineIdGenerationPort;
 
     @Autowired
-    private CreateBovineUseCase createBovineUseCase;
+    private SaveBovinePort saveBovinePort;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
+        TestDatabaseIsolationPolicy.registerOwnedContainer(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()
+        );
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
@@ -88,7 +95,7 @@ class BovinePostgresPersistenceIntegrationTest {
     }
 
     @Test
-    void shouldApplyV1ToV4ToCleanPostgresAndValidateHibernateMapping() {
+    void shouldApplyV1ToV6ToCleanPostgresAndValidateHibernateMapping() {
         String serverVersion = jdbcTemplate.queryForObject("SELECT version()", String.class);
         String mappedPort = Integer.toString(POSTGRES.getMappedPort(5432));
         System.out.printf(
@@ -103,7 +110,7 @@ class BovinePostgresPersistenceIntegrationTest {
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion().getVersion())
                 .toList())
-                .containsExactly("1", "2", "3", "4");
+                .containsExactly("1", "2", "3", "4", "5", "6");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT to_regclass('public.bovine') IS NOT NULL",
                 Boolean.class
@@ -161,7 +168,7 @@ class BovinePostgresPersistenceIntegrationTest {
                 testOrigin()
         );
 
-        BovineId createdId = createBovineUseCase.create(command);
+        BovineId createdId = persistBovine(command);
         entityManager.flush();
         entityManager.clear();
 
@@ -194,7 +201,7 @@ class BovinePostgresPersistenceIntegrationTest {
     @Test
     @Transactional
     void shouldPersistOptionalAttributesAsNull() {
-        BovineId createdId = createBovineUseCase.create(unregisteredCommand("Optional Nulls"));
+        BovineId createdId = persistBovine(unregisteredCommand("Optional Nulls"));
         entityManager.flush();
         entityManager.clear();
 
@@ -242,7 +249,7 @@ class BovinePostgresPersistenceIntegrationTest {
                 new BovineOrigin("Criador local", "Fazenda de origem", new FarmId(7_777L))
         );
 
-        BovineId id = createBovineUseCase.create(command);
+        BovineId id = persistBovine(command);
         entityManager.flush();
         entityManager.clear();
 
@@ -273,7 +280,7 @@ class BovinePostgresPersistenceIntegrationTest {
                 testOrigin()
         );
 
-        BovineId createdId = createBovineUseCase.create(provisional);
+        BovineId createdId = persistBovine(provisional);
         entityManager.flush();
         entityManager.clear();
 
@@ -290,8 +297,8 @@ class BovinePostgresPersistenceIntegrationTest {
     @Test
     @Transactional
     void shouldPersistValidLocalFatherAndMotherForeignKeys() {
-        BovineId fatherId = createBovineUseCase.create(unregisteredCommand("PG Father"));
-        BovineId motherId = createBovineUseCase.create(unregisteredCommand("PG Mother"));
+        BovineId fatherId = persistBovine(unregisteredCommand("PG Father"));
+        BovineId motherId = persistBovine(unregisteredCommand("PG Mother"));
         CreateBovineCommand child = new CreateBovineCommand(
                 "PG Child",
                 nextInternalCode(),
@@ -311,7 +318,7 @@ class BovinePostgresPersistenceIntegrationTest {
                 testOrigin()
         );
 
-        BovineId childId = createBovineUseCase.create(child);
+        BovineId childId = persistBovine(child);
         entityManager.flush();
         entityManager.clear();
 
@@ -322,14 +329,14 @@ class BovinePostgresPersistenceIntegrationTest {
     }
 
     @Test
-    void shouldRollbackBovineAfterFlushInsideUseCaseTransactionBoundary() {
+    void shouldRollbackBovinePersistenceWhenOuterTransactionRollsBack() {
         CreateBovineCommand command = unregisteredCommand("PG Rollback");
         AtomicReference<BovineId> createdId = new AtomicReference<>();
 
         boolean rolledBack = false;
         try {
             transactionTemplate.executeWithoutResult(status -> {
-                BovineId id = createBovineUseCase.create(command);
+                BovineId id = persistBovine(command);
                 createdId.set(id);
                 entityManager.flush();
                 entityManager.clear();
@@ -483,6 +490,35 @@ class BovinePostgresPersistenceIntegrationTest {
                 null,
                 testOrigin()
         );
+    }
+
+    private BovineId persistBovine(CreateBovineCommand command) {
+        BovineId id = bovineIdGenerationPort.nextId();
+        Instant createdAt = Instant.now();
+        Bovine bovine = Bovine.createManually(
+                id,
+                new BovineInternalCode(command.internalCode()),
+                new BovineRegistrationData(
+                        command.name(),
+                        command.sex(),
+                        command.breed(),
+                        command.coatColor(),
+                        command.birthDate(),
+                        command.status(),
+                        command.earTag(),
+                        command.registrationNumber(),
+                        command.registrationAssociation(),
+                        command.registrationCategory(),
+                        command.fatherId(),
+                        command.motherId(),
+                        command.fatherRegistrationNumber(),
+                        command.motherRegistrationNumber()
+                ),
+                createdAt,
+                command.origin()
+        );
+        transactionTemplate.executeWithoutResult(status -> saveBovinePort.save(bovine));
+        return id;
     }
 
     private static BovineOrigin testOrigin() {

@@ -53,6 +53,18 @@ public class BovineOwnershipPeriod {
         );
     }
 
+    public static BovineOwnershipPeriod reconstitute(
+            BovineOwnershipPeriodId id,
+            BovineId bovineId,
+            FarmId farmId,
+            Instant startedAt,
+            Instant endedAt
+    ) {
+        return new BovineOwnershipPeriod(
+                id, bovineId, farmId, startedAt, endedAt
+        );
+    }
+
     public boolean contains(Instant instant) {
         Objects.requireNonNull(instant, "O instante consultado é obrigatório");
         return !instant.isBefore(startedAt)

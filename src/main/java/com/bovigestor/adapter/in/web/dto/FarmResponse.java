@@ -11,6 +11,8 @@ public record FarmResponse(
         String name,
         @Schema(description = "Série exclusiva da fazenda.", example = "BVL")
         String codeSeries,
+        @Schema(description = "Fuso horário IANA persistido para a fazenda.", example = "America/Sao_Paulo")
+        String timeZone,
         @Schema(description = "Situação atual da fazenda.", example = "ACTIVE")
         String status,
         @Schema(description = "Instante UTC de criação.", example = "2026-10-15T12:00:00Z")

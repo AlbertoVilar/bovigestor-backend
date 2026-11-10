@@ -1,5 +1,7 @@
 package com.bovigestor.adapter.in.web.exception;
 
+import com.bovigestor.application.exceptions.ResourceNotFoundException;
+import com.bovigestor.application.exceptions.InactiveFarmException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -13,6 +15,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.sql.SQLException;
@@ -95,6 +98,28 @@ public class FarmWebExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(problem);
     }
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleApplicationResourceNotFound(
+            ResourceNotFoundException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                "O recurso solicitado não foi encontrado."
+        );
+        problem.setTitle("Recurso não encontrado");
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InactiveFarmException.class)
+    public ResponseEntity<ProblemDetail> handleInactiveFarm(InactiveFarmException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "A fazenda está inativa e não pode receber bovinos."
+        );
+        problem.setTitle("Fazenda inativa");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ProblemDetail> handleResourceNotFound(NoResourceFoundException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
@@ -104,6 +129,19 @@ public class FarmWebExceptionHandler {
         problem.setTitle("Recurso não encontrado");
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ProblemDetail> handleMethodArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Um parâmetro da requisição possui formato inválido."
+        );
+        problem.setTitle("Parâmetro inválido");
+
+        return ResponseEntity.badRequest().body(problem);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

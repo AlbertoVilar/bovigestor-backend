@@ -1,10 +1,10 @@
 # Atores e catálogo de casos de uso
 
-Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e implementação da branch `feat/bovine-web-01`, baseada em `7257c2bce524274bad106a5894bde7c8b98a4286`. `IMPLEMENTED` indica alcance efetivo; `PARTIAL` indica fluxo técnico com limitação operacional; `PROPOSED` não é contrato aprovado.
+Referência desta atualização: código local em `feat/bovine-ownership-period-persistence`, HEAD `559c745cf8c00bde828b3f53a62575e00e5999d3`, aguardando revisão independente. `IMPLEMENTED` descreve apenas o alcance local testado; não aprova produção nem exposição segura.
 
 ## Atores
 
-**Confirmado tecnicamente:** um cliente HTTP local pode chamar `POST /api/v1/farms`; não há autenticação. `POST /api/v1/bovines` existe somente no perfil `dev`, com feature flag, bind em loopback e sem autenticação. Nenhum papel de usuário de negócio está implementado; o endpoint bovino é apenas smoke técnico, não cadastro operacional autorizado.
+**Confirmado tecnicamente:** um cliente HTTP pode chamar `POST /api/v1/farms`; não há autenticação. `POST /api/v1/bovines` existe somente no perfil `dev`, com feature flag, exige `farmId` e grava custódia inicial na mesma transação; também não há autenticação/autorização. `GET /api/v1/farms/{id}` e `GET /api/v1/bovines/{id}` existem sem guards de profile/flag. A política de exposição e os papéis de usuário permanecem pendentes; estas rotas locais não constituem aprovação de produção.
 
 **Propostos:** administrador, proprietário de fazenda, operador, responsável técnico/veterinário e usuário de consulta. Sistema externo de registro/identificação é ator secundário possível, sem integração atual. A permissão de cada papel precisa de decisão de produto e segurança.
 
@@ -13,14 +13,14 @@ Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e implement
 | UC | Módulo e objetivo | Estado | RF |
 | --- | --- | --- | --- |
 | UC-001 | Fazendas: cadastrar fazenda | IMPLEMENTED | RF-001, RF-002 |
-| UC-002 | Fazendas: consultar fazenda | PROPOSED | RF-003 |
+| UC-002 | Fazendas: consultar fazenda | IMPLEMENTED local; exposição/autorização pendentes | RF-003 |
 | UC-003 | Fazendas: atualizar/ativar/desativar | PROPOSED; métodos de status somente no domínio | RF-004 |
-| UC-004 | Bovinos: cadastrar tecnicamente | PARTIAL; fluxo Web e persistência somente em `dev`, sem titularidade/autorização | RF-005, RF-006, RF-007 |
-| UC-005 | Titularidade: registrar titularidade inicial | PROPOSED | RF-008 |
-| UC-006 | Bovinos: consultar bovino | PROPOSED | RF-009 |
-| UC-007 | Bovinos: consultar genealogia e histórico | PROPOSED | RF-009 |
+| UC-004 | Bovinos: cadastrar com custódia inicial | IMPLEMENTED local; POST limitado a `dev`+flag, sem autorização | RF-005, RF-006, RF-007, RF-008 |
+| UC-005 | Titularidade: registrar período inicial | IMPLEMENTED no fluxo inicial; histórico/transferência não incluídos | RF-008 |
+| UC-006 | Bovinos: consultar bovino por ID | IMPLEMENTED local; política de exposição pendente | RF-009 |
+| UC-007 | Bovinos: consultar genealogia e histórico | PARTIAL: resposta inclui referências de genitores; não há navegação genealógica nem histórico de custódia | RF-009, RF-011 |
 | UC-008 | Bovinos: atualizar cadastro/situação | PROPOSED | RF-010 |
-| UC-009 | Titularidade: consultar titularidade atual/histórico | PROPOSED | RF-011 |
+| UC-009 | Titularidade: consultar titularidade atual/histórico | PROPOSED; V5/V6 schema existe, sem consulta | RF-011 |
 | UC-010 | Titularidade: transferir entre fazendas | PROPOSED | RF-012 |
 | UC-011 | Titularidade: registrar saída ou entrada externa | PROPOSED | RF-013 |
 | UC-012 | Administração: gerenciar vínculos de pessoas/fazendas | PROPOSED | RF-014 |
@@ -41,35 +41,33 @@ Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e implement
 - **Pré-condições:** aplicação em execução, DataSource disponível e migration V1 aplicada.
 - **Gatilho:** `POST /api/v1/farms` com JSON `name` e `codeSeries`.
 - **Fluxo principal:** (1) `FarmRequest` é validado; (2) `FarmWebMapper` produz `CreateFarmCommand`; (3) `FarmConfig` abre transação em `TransactionTemplate`; (4) `CreateFarmService` obtém `FarmId`, cria `Farm` ativa com `Clock` e chama `SaveFarmPort`; (5) o adapter converte para `FarmJpaEntity` e persiste; (6) o commit conclui; (7) controller responde 201 com `{ "id": ... }`.
-- **Alternativas:** `codeSeries` aceita três ou quatro letras maiúsculas; `FarmResponse` ainda não é usado.
+- **Alternativas:** `codeSeries` aceita três ou quatro letras maiúsculas; `FarmResponse` é usado pelo GET de consulta de fazenda.
 - **Exceções:** entrada inválida/JSON ausente ou inválido → 400; método não permitido → 405; tipo de conteúdo não suportado → 415; SQLState `23505` → 409 genérico; falha inesperada → 500 sanitizado. Erros de persistência durante commit impedem a resposta 201.
 - **Pós-condições:** uma linha `farm` com status `ACTIVE` e timestamps iniciais iguais; falha transacional deixa a gravação sem efeito.
 - **Regras:** `FarmId` positivo; nome não nulo/em branco; série `[A-Z]{3,4}`; unicidade da série no banco; nome HTTP até 255 caracteres.
 - **Requisitos:** RF-001, RF-002, RNF-002, RNF-003, RNF-005. **Aceitação:** testes `CreateFarmControllerHttpTest`, `CreateFarmControllerIntegrationTest`, `CreateFarmServiceIntegrationTest` e `CreateFarmTransactionRollbackIntegrationTest` comprovam os pontos respectivos.
 
-## UC-004 — Cadastrar bovino tecnicamente (parcial)
+## UC-004 — Cadastrar bovino com custódia inicial (local, limitado)
 
-- **Objetivo técnico:** criar e persistir um agregado bovino válido, retornando `BovineId`, para validação local da integração.
-- **Ator:** cliente HTTP local no perfil `dev`; não há identidade de usuário ou autorização por fazenda.
-- **Pré-condições:** perfil `dev`, feature flag ativa, PostgreSQL acessível e V1/V2 aplicadas. O command atual não contém `FarmId`.
+- **Objetivo:** criar e persistir um bovino e seu primeiro período de custódia, retornando `BovineId`.
+- **Ator:** cliente HTTP; POST registrado somente em `dev` com feature flag. Não há identidade de usuário ou autorização por fazenda.
+- **Pré-condições:** perfil `dev`, flag ativa, banco alcançável e V1–V6 aplicadas; request contém `farmId` e `origin`.
 - **Gatilho:** `POST /api/v1/bovines` com o contrato `BovineRequest`.
-- **Fluxo principal implementado:** (1) Bean Validation valida o request; (2) `BovineWebMapper` produz `CreateBovineCommand` e converte IDs locais para `BovineId`; (3) controller delega ao `CreateBovineUseCase`; (4) `BovineConfig` abre transação via `TransactionTemplate`; (5) `CreateBovineService` obtém o ID, cria `Bovine` e chama `SaveBovinePort`; (6) adapters persistem no PostgreSQL; (7) controller responde `201` com `{ "id": ... }`.
+- **Fluxo principal implementado localmente:** Bean Validation; mapper produz `CreateBovineWithInitialOwnershipCommand`; `BovineConfig` abre transação externa; serviço consulta a fazenda, rejeita inexistente/inativa antes de gerar IDs, cria bovino/período com o mesmo instante, persiste ambos e responde `201` com `{ "id": ... }`.
 - **Alternativas implementadas:** categoria `UNREGISTERED` explícita sem número/associação oficial; PO/PC admitem referências de pai e mãe por IDs locais ou números externos; PA dispensa genitores.
 - **Exceções HTTP:** Bean Validation/JSON inválido ou regra de cadastro inválida → 400; genitor local inexistente → 400; `internalCode` duplicado → 409; falha inesperada → 500 sanitizado.
-- **Limitação explícita:** não associa fazenda, não cria `BovineOwnershipPeriod` e não autentica/autorização usuários. Não deve ser exposto em produção.
-- **Requisitos:** RF-005, RF-006 e RF-007 têm fluxo técnico implementado; RF-008 segue pendente. **Evidências:** testes Domain/Application, `BovineWebMapperTest`, `CreateBovineControllerHttpTest`, `CreateBovineControllerAvailabilityTest` e `CreateBovineHttpPostgresIntegrationTest`.
+- **Limitações explícitas:** sem autenticação/autorização ou aprovação para produção; entrada usa `Clock.instant()` e não implementa data retroativa; transferência não existe; conexão/schema persistentes dev não foram validados.
+- **Requisitos:** RF-005–008 implementados localmente no alcance descrito. **Evidências:** testes Domain/Application, `BovineWebMapperTest`, `CreateBovineControllerHttpTest`, `CreateBovineProfileGuardIntegrationTest`, `CreateBovineWithInitialOwnershipPostgresIntegrationTest` e rollback.
 
-## UC-005 — Registrar titularidade inicial (proposta prioritária)
+## UC-005 — Registrar titularidade inicial (implementado no fluxo de criação local)
 
 - **Objetivo:** associar animal a fazenda no início do histórico, sem alterar `BovineId`.
 - **Ator principal proposto:** operador ou proprietário autorizado. **Secundários:** persistência de bovino/fazenda.
-- **Pré-condições propostas:** animal e fazenda válidos; política de autorização e data de início definidas. **Gatilho:** cadastro inicial ou entrada de animal.
-- **Fluxo principal proposto:** verificar fazenda; criar bovino ou selecionar bovino admitido; criar primeiro período; gravar ambos na mesma transação se o cadastro os exigir conjuntamente.
-- **Alternativas:** titularidade informada no cadastro ou em comando separado; escolha pendente no [ADR](../01-architecture/ARCHITECTURE_DECISIONS.md).
-- **Exceções propostas:** fazenda inexistente/inativa, conflito temporal ou acesso indevido. Códigos HTTP e regras exatas não estão aprovados.
-- **Pós-condição proposta:** histórico inicia com um único período ativo. **Regra:** identidade bovina não incorpora fazenda atual.
-- **Requisitos:** RF-008, RNF-007. **Aceitação futura:** teste integrado de atomicidade, exclusividade de titularidade ativa e preservação de `BovineId`.
-- **Estado:** PROPOSED/OPEN; não existe command, tabela ou caso de uso correspondente; ADR-007 continua aberto.
+- **Pré-condições locais:** POST em `dev`+flag, request válido e fazenda existente/ativa. Não há autorização de usuário.
+- **Fluxo implementado:** dentro da transação externa, consulta fazenda, cria bovino e primeiro período com o mesmo instante e persiste ambos.
+- **Constraint:** V6 PostgreSQL limita a um período aberto por bovino; não impede sobreposições entre períodos encerrados.
+- **Limites:** sem endpoint isolado do período, timeline, transferência, data retroativa ou aprovação para produção; banco persistente dev não validado.
+- **Evidência:** testes de serviço, PostgreSQL Testcontainers e rollback foram reportados; revisão independente do conjunto cumulativo permanece pendente.
 
 ## UC-010 — Transferir bovino entre fazendas (proposta prioritária)
 
@@ -93,7 +91,7 @@ Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e implement
 - **Exceções propostas:** bovino inexistente, acesso negado ou inconsistência de períodos; códigos HTTP não definidos.
 - **Pós-condição:** nenhuma alteração persistida. **Regra:** `BovineId` permanece igual em todos os períodos; não presumir que o status `SOLD` identifica sozinho a fazenda atual.
 - **Requisitos:** RF-011, RNF-007. **Aceitação futura:** teste temporal para data interna/limítrofe, histórico ordenado e acesso permitido/negado.
-- **Estado:** PROPOSED; não há tabela nem caso de uso.
+- **Estado:** PROPOSED para consulta; V5 persiste os períodos e V6 limita período aberto, mas não há porta, serviço ou endpoint de timeline.
 
 ## UC-012 — Gerenciar vínculos de pessoas e fazendas (proposta prioritária)
 
@@ -123,8 +121,8 @@ Referência: [requisitos](../01-requirements/SYSTEM_REQUIREMENTS.md) e implement
 | --- | --- |
 | UC-002 | Buscar fazenda por ID; definir projeção, autorização e resposta para ausência. |
 | UC-003 | Alterar dados/estado de fazenda; definir operações permitidas e exposição HTTP. |
-| UC-006 | Buscar bovino; definir leitura/reconstituição do agregado e dados visíveis. |
-| UC-007 | Resolver genitores locais/externos e histórico; definir limites de consulta e qualidade das referências. |
+| UC-006 | GET por ID e reconstituição existem localmente; política de exposição/autorização ainda pendente. |
+| UC-007 | DTO expõe referências de genitores; navegação genealógica e consulta de custódia ainda não existem. |
 | UC-008 | Atualizar bovino; definir transições e proteção contra mudanças semânticas de identidade. |
 | UC-011 | Registrar saída/entrada externa; definir períodos sem fazenda local. |
 | UC-013 | Registrar cobertura, inseminação ou IATF; validar campos e regras com especialista. |

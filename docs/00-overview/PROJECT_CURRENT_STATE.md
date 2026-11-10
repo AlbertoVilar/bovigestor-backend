@@ -1,31 +1,28 @@
 # Estado atual do projeto
 
-Referência: estado implementado na branch `feat/bovine-web-01`, baseada no merge BOVI-03A `7257c2bce524274bad106a5894bde7c8b98a4286`. Este inventário descreve código existente; propostas estão no [roadmap](../07-planning/IMPLEMENTATION_ROADMAP.md).
+Este documento descreve o estado local observado na branch `feat/bovine-ownership-period-persistence`, HEAD `559c745cf8c00bde828b3f53a62575e00e5999d3`, durante a preparação BOVI-LOCAL-CONSOLIDATION-FINALIZE-01. As alterações continuam locais e aguardam revisão independente; descrição de código existente não significa aprovação para produção. Consulte [requisitos e rastreabilidade](../01-requirements/TRACEABILITY_MATRIX.md), [decisões](../01-architecture/ARCHITECTURE_DECISIONS.md) e [roadmap](../07-planning/IMPLEMENTATION_ROADMAP.md).
 
-## Implementado
+## Implementado no código local
 
-- Java 25, Spring Boot 4.1.1, Maven Wrapper e CI `Backend CI` em PRs para `develop` e `main`.
-- Ambiente PostgreSQL 17 em Docker Compose, exposto em `127.0.0.1:5433`; perfis `dev` (PostgreSQL), `h2` e `test` (H2 em memória). Flyway possui V1 (fazenda) e V2 (bovino).
-- Domínio: `Farm`, `FarmId`, `FarmStatus`, `Bovine`, `BovineId`, `BovineInternalCode`, `BovineRegistrationData`, `BovineRegistrationCategory`, `BovineSex` e `BovineStatus`.
-- Cadastro de fazenda: `CreateFarmUseCase`/`CreateFarmService`, portas de geração de ID e gravação, adaptadores JPA, `FarmJpaEntity`, mapper, `FarmConfig` com `TransactionTemplate` e `POST /api/v1/farms` com HTTP 201 e corpo contendo somente `id`.
-- Validação HTTP da fazenda, respostas sanitizadas 400/405/409/415/500 e OpenAPI nos perfis `dev`, `h2` e `test`. `FarmResponse` existe como DTO reservado, sem endpoint de consulta.
-- Cadastro técnico de bovino: `CreateBovineCommand`, `CreateBovineUseCase`, `CreateBovineService`, portas, adapters JPA, `BovineJpaEntity`, `BovineConfig` transacional, V2 e `POST /api/v1/bovines`. O controller só é registrado com o perfil `dev` e a feature flag habilitada; o servidor dev escuta em `127.0.0.1`.
-- DTO Web de bovino com Bean Validation, enums do Domain, limites alinhados às colunas, mapper manual `Long` → `BovineId`, resposta HTTP contendo somente o ID, documentação OpenAPI e erros HTTP sanitizados.
-- Testes Web com MockMvc e teste de integração HTTP + PostgreSQL 17 via Testcontainers; a operação de criação dev também foi validada contra o PostgreSQL local.
-- Métodos de ativação/desativação de `Farm` existem no domínio, mas não há casos de uso ou endpoints para essas ações.
+- Java 25, Spring Boot 4.1.1, Maven Wrapper e CI `Backend CI` em pull requests para `develop` e `main`.
+- PostgreSQL 17 é usado pelos testes de integração via Testcontainers descartáveis. A política de isolamento rejeita destinos externos e configurações concorrentes antes de criar DataSource/conexão. V1–V6 estão no classpath compartilhado; não há diretórios separados de migrations para H2 e PostgreSQL.
+- Cadastro de fazenda: `CreateFarmUseCase`/`CreateFarmService`, adapters JPA e `POST /api/v1/farms`, com `TransactionTemplate`, validação e resposta `201` com ID.
+- Cadastro bovino com custódia inicial: `CreateBovineWithInitialOwnershipUseCase` e `CreateBovineWithInitialOwnershipService` consultam a fazenda, rejeitam inexistente/inativa antes de gerar IDs, criam bovino e período com o mesmo instante e persistem ambos na transação externa de `BovineConfig`. O `POST /api/v1/bovines` exige `farmId` e é registrado somente com perfil `dev` e `bovigestor.bovine.creation.enabled=true`.
+- Persistência de bovinos e períodos, geração de IDs por sequences, mapeamento JPA nos dois sentidos para Bovine/Farm, e reconstituição de `Farm` preservando status/time zone/timestamps.
+- V5 cria `bovine_ownership_period`, FK para bovino/fazenda e CHECK `ended_at IS NULL OR ended_at > started_at`. V6 cria índice único parcial PostgreSQL `uq_bovine_one_open_ownership` para permitir no máximo um período aberto por bovino. A V6 não impede sobreposição entre períodos encerrados e não implementa transferência.
+- Consultas locais `GET /api/v1/bovines/{id}` e `GET /api/v1/farms/{id}` retornam os DTOs correspondentes e 404 para recursos ausentes. A política de exposição e autorização destas consultas ainda está pendente; os controllers de consulta não têm guard de profile/flag/autenticação.
+- A criação de bovino e fazenda tem validações Web, respostas `ProblemDetail` sanitizadas e testes de rollback. Testes de integração usam PostgreSQL 17 descartável; testes unitários e WebMvc sem persistência continuam sem banco.
 
-## Ainda não implementado
+## Ainda não implementado ou não aprovado
 
-- Consulta e reconstituição JPA → Domain de bovinos e atualização cadastral de bovinos.
-- Consulta, atualização ou desativação de fazenda pela API; consulta e atualização de bovinos.
-- Identidade de proprietário/usuário, autenticação/autorização, vínculo fazenda–bovino, histórico de titularidade e transferência.
+- Transferência de bovinos entre fazendas, saída/entrada externa, consulta de períodos de custódia, alteração cadastral de bovino e operações de atualização/inativação de fazenda pela API.
+- Autenticação, autorização, identidade de usuários, vínculo pessoa–fazenda e isolamento de leitura por fazenda. A existência de rotas GET não constitui aprovação de exposição.
 - Reprodução, lactação, ordenhas, sanidade, qualidade do leite, auditoria de negócio e relatórios.
+- Ativação de criação operacional em produção. O POST atual continua limitado ao perfil de desenvolvimento e não implementa segurança por usuário/fazenda.
 
-## Limitações verificadas
+## Evidência e limites
 
-- A suíte de integração combina H2 e PostgreSQL 17 via Testcontainers. A BOVI-03A foi validada com 206 testes, incluindo 30 PostgreSQL; a BOVI-WEB-01 passou posteriormente com 244 testes. O smoke HTTP local contra o PostgreSQL dev foi uma validação manual distinta.
-- `CreateBovineCommand` não recebe `FarmId`; o endpoint técnico não cria titularidade inicial nem autoriza uma fazenda.
-- Não existe perfil de produção configurado; o controller é restringido explicitamente ao perfil `dev`, a flag é falsa na configuração base e a aplicação dev vincula HTTP a loopback. Não habilitar a flag em produção.
-- `BovineInternalCode` é validado no Domain e tem unicidade global por `uq_bovine_internal_code`; o prefixo não determina fazenda atual.
-- `Bovine` expõe leitura dos campos, mas ainda não possui adapter/port de consulta nem reconstituição JPA.
-- Há avisos não bloqueantes conhecidos do Flyway para a versão do H2 e de anexação dinâmica do Mockito/JDK.
+- Os relatórios Surefire já existentes em `target/surefire-reports`, datados de 2026-11-09, contêm 44 suítes e 331 testes, sem falhas, erros ou skips. Isso é uma execução anterior, não o resultado de uma execução da tarefa de documentação; a correspondência byte a byte entre fontes testadas e working tree não está registrada nesses XMLs. A execução de validação desta tarefa deve ser registrada no relatório de revisão.
+- A integração é verificada contra PostgreSQL descartável via Testcontainers. A configuração de `application-dev.yml` está preparada, mas conexão/schema do banco persistente dev não foram validados; não se afirma que a aplicação foi iniciada contra ele.
+- A V5 atual tem SHA-256 `82C37AF8DFFE1B4F2FCC2400E3A5D4EF1FD8F0C580BA885471042DD1DA3ABCEA` (866 bytes). Um relatório anterior registrou 870 bytes e outro SHA (`9292E15B125D5B17B27C6916B70910ABE5EFD4B5B9C33E950E0C369A28022172`). O SQL publicado é equivalente após normalizar whitespace, mas não há evidência para provar preservação histórica byte a byte ou explicar a diferença. A migration não foi restaurada nem normalizada nesta preparação.
+- A atualização documental e o staging local não aprovam o sistema para produção nem autorizam publicação Git.

@@ -11,8 +11,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
-@ActiveProfiles("h2")
-class H2ProfileTests {
+@ActiveProfiles("test")
+class PostgresProfileTests {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -25,14 +25,13 @@ class H2ProfileTests {
                 Integer.class
         );
         Integer farmTables = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
-                        + "WHERE LOWER(TABLE_SCHEMA) = 'public' AND LOWER(TABLE_NAME) = 'farm'",
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'public' AND table_name = 'farm'",
                 Integer.class
         );
         Integer farmSequences = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SEQUENCES "
-                        + "WHERE LOWER(SEQUENCE_SCHEMA) = 'public' "
-                        + "AND LOWER(SEQUENCE_NAME) = 'farm_id_seq'",
+                "SELECT COUNT(*) FROM information_schema.sequences "
+                        + "WHERE sequence_schema = 'public' AND sequence_name = 'farm_id_seq'",
                 Integer.class
         );
 

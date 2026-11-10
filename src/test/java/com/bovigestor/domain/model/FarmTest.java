@@ -14,6 +14,7 @@ class FarmTest {
 
     private static final FarmId FARM_ID = new FarmId(1L);
     private static final Instant CREATED_AT = Instant.parse("2026-01-01T10:00:00Z");
+    private static final Instant UPDATED_AT = Instant.parse("2026-01-02T10:00:00Z");
     private static final ZoneId TIME_ZONE = ZoneId.of("America/Sao_Paulo");
 
     @Test
@@ -27,6 +28,70 @@ class FarmTest {
         assertThat(farm.status()).isEqualTo(FarmStatus.ACTIVE);
         assertThat(farm.createdAt()).isEqualTo(CREATED_AT);
         assertThat(farm.updatedAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    void shouldReconstituteFarmPreservingStatusAndTimestamps() {
+        Farm farm = Farm.reconstitute(
+                FARM_ID,
+                "Fazenda Boa Vista",
+                "BVL",
+                TIME_ZONE,
+                FarmStatus.INACTIVE,
+                CREATED_AT,
+                UPDATED_AT
+        );
+
+        assertThat(farm.id()).isEqualTo(FARM_ID);
+        assertThat(farm.status()).isEqualTo(FarmStatus.INACTIVE);
+        assertThat(farm.createdAt()).isEqualTo(CREATED_AT);
+        assertThat(farm.updatedAt()).isEqualTo(UPDATED_AT);
+    }
+
+    @Test
+    void shouldAcceptUpdatedAtEqualToCreatedAtWhenReconstitutingFarm() {
+        Farm farm = Farm.reconstitute(
+                FARM_ID,
+                "Fazenda Boa Vista",
+                "BVL",
+                TIME_ZONE,
+                FarmStatus.ACTIVE,
+                CREATED_AT,
+                CREATED_AT
+        );
+
+        assertThat(farm.createdAt()).isEqualTo(CREATED_AT);
+        assertThat(farm.updatedAt()).isEqualTo(CREATED_AT);
+    }
+
+    @Test
+    void shouldRejectNullUpdatedAtWhenReconstitutingFarm() {
+        assertThatThrownBy(() -> Farm.reconstitute(
+                FARM_ID,
+                "Fazenda Boa Vista",
+                "BVL",
+                TIME_ZONE,
+                FarmStatus.ACTIVE,
+                CREATED_AT,
+                null
+        ))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("A data de atualização é obrigatória");
+    }
+
+    @Test
+    void shouldRejectUpdatedAtBeforeCreatedAtWhenReconstitutingFarm() {
+        assertThatThrownBy(() -> Farm.reconstitute(
+                FARM_ID,
+                "Fazenda Boa Vista",
+                "BVL",
+                TIME_ZONE,
+                FarmStatus.ACTIVE,
+                CREATED_AT,
+                CREATED_AT.minusNanos(1)
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A data de atualização não pode ser anterior à criação");
     }
 
     @Test
