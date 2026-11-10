@@ -1,8 +1,8 @@
 # Modelo relacional e evolução proposta
 
-Fonte atual: migrations [V1](../../src/main/resources/db/migration/V1__create_farm_schema.sql) e [V2](../../src/main/resources/db/migration/V2__create_bovine_schema.sql), entities JPA e implementação da branch `feat/bovine-web-01`. A seção **existente** descreve a base; a seção **PROPOSED** é planejamento, sem SQL executado. Ver [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md) e [modelo de domínio](../03-domain/DOMAIN_MODEL.md).
+Fonte desta atualização: migrations [V1–V6](../../src/main/resources/db/migration), entities JPA e código local na branch `feat/bovine-ownership-period-persistence`, HEAD `559c745cf8c00bde828b3f53a62575e00e5999d3`, aguardando revisão. A seção existente descreve o SQL local; a seção **PROPOSED** permanece planejamento. Ver [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md) e [modelo de domínio](../03-domain/DOMAIN_MODEL.md).
 
-## Schema existente — V1 e V2
+## Schema existente — V1 a V6
 
 ```mermaid
 erDiagram
@@ -27,6 +27,9 @@ erDiagram
         VARCHAR registration_number
         VARCHAR registration_association
         VARCHAR registration_category
+        VARCHAR origin_creator_name
+        VARCHAR origin_farm_name
+        BIGINT origin_farm_id FK
         BIGINT father_id FK
         BIGINT mother_id FK
         VARCHAR father_registration_number
@@ -34,16 +37,27 @@ erDiagram
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
+    bovine_ownership_period {
+        BIGINT id PK
+        BIGINT bovine_id FK
+        BIGINT farm_id FK
+        TIMESTAMPTZ started_at
+        TIMESTAMPTZ ended_at
+    }
     bovine }o--|| bovine : father_id / mother_id
+    bovine ||--o{ bovine_ownership_period : has_history
+    farm ||--o{ bovine_ownership_period : custody
 ```
 
 V1 cria `farm_id_seq`; V2 cria `bovine_id_seq` (ambas iniciam em 1 e incrementam em 1). As sequences geram identidades técnicas positivas separadas dos códigos de negócio.
 
 `farm.id` é PK, `NOT NULL` e `> 0`; `name` é `VARCHAR(255) NOT NULL` com `TRIM(name)` não vazio; `code_series` é `VARCHAR(4) NOT NULL UNIQUE`; `status` é `VARCHAR(20) NOT NULL` limitado a `ACTIVE`/`INACTIVE`; timestamps são `TIMESTAMP WITH TIME ZONE NOT NULL`. A expressão `[A-Z]{3,4}` é validada no Domain/Web, não por CHECK na V1.
 
-`bovine` tem 18 colunas alinhadas a `BovineJpaEntity`; `id` é PK positiva; `internal_code` tem constraint global `uq_bovine_internal_code`; sexo, status e categoria são texto restrito aos enums existentes; timestamps são `TIMESTAMP WITH TIME ZONE`. `father_id` e `mother_id` são FKs opcionais autorreferenciadas e não podem apontar para o próprio animal. A V2 também impõe nome não branco, nascimento não posterior a `created_at`, coerência entre categoria e dados de registro, e referências parentais exigidas para PO/PC. Referências externas são campos de texto independentes, sem FK.
+`bovine` recebe colunas de V2/V3 alinhadas a `BovineJpaEntity` e `BovineOriginEmbeddable`; `id` é PK positiva e `internal_code` é globalmente único. V2 impõe checks de cadastro e FKs opcionais para genitores; V3 adiciona origem informada e FK opcional `origin_farm_id`; V4 adiciona `farm.time_zone` nullable para compatibilidade histórica.
 
-As entities JPA são separadas de `Farm`/`Bovine`; mappers manuais convertem Domain → JPA. Não há coluna `farm_id` em `bovine`: o vínculo temporal permanece para uma futura tabela de períodos de titularidade.
+As entities JPA são separadas de `Farm`/`Bovine`; mappers manuais convertem nos dois sentidos com factories de reconstituição. `origin_farm_id` registra a origem informada, não a fazenda de custódia. A custódia é representada por `bovine_ownership_period`.
+
+V5 cria sequence/tabela de períodos, FKs para bovino/fazenda e CHECK `ended_at IS NULL OR ended_at > started_at`. V6 cria o índice único parcial `uq_bovine_one_open_ownership` em `bovine_id` para linhas abertas. Cada bovino pode ter vários períodos encerrados e no máximo um aberto. O índice não impede sobreposição entre períodos encerrados, não implementa transferência nem substitui regras temporais adicionais.
 
 ## Modelo PROPOSED — identidade, genealogia e titularidade
 
@@ -104,7 +118,7 @@ erDiagram
 | Identidade bovina (implementada) | `bovine.id` é PK técnica; `bovine.internal_code` é único globalmente por `uq_bovine_internal_code`. O prefixo do código não determina fazenda. |
 | Registro genealógico (implementado) | V2 replica por `CHECK` as coerências locais entre categoria, registros e referências exigidas; o Domain permanece fonte das invariantes de criação. Referências externas não geram FK. |
 | Genitor local (implementado) | FKs opcionais para `bovine.id` e checks contra autorreferência. A existência é garantida pelo banco; ciclos indiretos não são verificados. |
-| Titularidade ativa | Candidato: índice único parcial PostgreSQL por `bovine_id` quando `ended_at IS NULL`, para no máximo um período aberto. Não impede sobreposição entre períodos fechados. |
+| Titularidade ativa | Implementado em V6: índice único parcial PostgreSQL por `bovine_id` quando `ended_at IS NULL`, para no máximo um período aberto. Não impede sobreposição entre períodos fechados. |
 | Intervalos temporais | Definir limites inclusivos/exclusivos, fuso, retroatividade e validação de sobreposição. Eventual exclusão temporal PostgreSQL requer projeto e teste de concorrência. |
 | Transferência | Fechar período anterior e abrir novo na mesma transação; manter histórico e `BovineId`; definir como tratar saída externa. |
 | Exclusão lógica | Ainda não decidida. Não substituir histórico por remoção; definir retenção e status conforme regras de negócio. |
@@ -169,4 +183,4 @@ erDiagram
 
 ## Estratégia de migração
 
-V1 e V2 já existem e não devem ser recriadas nem editadas retroativamente. Qualquer mudança de schema posterior deve usar nova migration (V3+) com gate próprio, teste H2/PostgreSQL e análise de dados/índices. A compatibilidade atual é validada em PostgreSQL 17 via Testcontainers e pelo smoke test dev; isso não aprova schema de titularidade.
+V1–V6 existem neste checkout e não devem ser editadas retroativamente. O SHA atual de V5 é `82C37AF8DFFE1B4F2FCC2400E3A5D4EF1FD8F0C580BA885471042DD1DA3ABCEA` (866 bytes); um registro histórico informa 870 bytes e SHA diferente. O SQL publicado é equivalente após normalização de whitespace, mas preservação byte a byte não foi comprovada; V5 não foi restaurada nem normalizada. Qualquer mudança futura requer nova migration, gate, teste PostgreSQL e análise de dados/índices. Testcontainers valida PostgreSQL 17 descartável; conexão/schema do banco persistente dev não foram validados.

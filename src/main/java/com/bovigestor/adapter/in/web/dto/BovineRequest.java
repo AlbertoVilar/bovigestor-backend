@@ -88,7 +88,12 @@ public record BovineRequest(
         @Schema(description = "Origem cadastral do bovino.", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "A origem do bovino é obrigatória")
         @Valid
-        OriginRequest origin
+        OriginRequest origin,
+
+        @Schema(description = "ID da fazenda de custódia inicial.", example = "15", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotNull(message = "A fazenda de ingresso é obrigatória")
+        @Positive(message = "O identificador da fazenda de ingresso deve ser positivo")
+        Long farmId
 ) {
     public record OriginRequest(
             @Schema(description = "Nome informado do criador.", example = "José Pereira", requiredMode = Schema.RequiredMode.REQUIRED)

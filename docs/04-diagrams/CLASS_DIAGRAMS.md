@@ -1,6 +1,6 @@
 # Diagramas UML de classes
 
-Fonte: implementação da branch `feat/bovine-web-01`, baseada em `7257c2bce524274bad106a5894bde7c8b98a4286`. **Seção A = código existente. Seção B = desenho conceitual PROPOSED para evolução**; `BovineOwnershipPeriod` e `BovineOwnershipPeriodId` já existem apenas no Domain, sem persistência JPA/tabela ou fluxo operacional. `Farm` e `Bovine` são tratadas como raízes de agregados independentes; o limite de agregado de `BovineOwnershipPeriod` permanece em discussão. O código não declara interface Java `AggregateRoot`. Ver [modelo de domínio](../03-domain/DOMAIN_MODEL.md) e [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md).
+Fonte desta atualização: código local na branch `feat/bovine-ownership-period-persistence`, HEAD `559c745cf8c00bde828b3f53a62575e00e5999d3`, aguardando revisão independente. **Seção A = componentes existentes localmente. Seção B = desenho conceitual PROPOSED**. `BovineOwnershipPeriod` e seu ID possuem Domain, entity/mapper JPA, V5/V6 e primeiro período no cadastro; consulta de timeline e transferência não existem. O limite de agregado do período segue em discussão. O código não declara interface Java `AggregateRoot`. Ver [modelo de domínio](../03-domain/DOMAIN_MODEL.md) e [ADRs](../01-architecture/ARCHITECTURE_DECISIONS.md).
 
 ## A. Modelo atual
 
@@ -117,7 +117,7 @@ classDiagram
     Bovine ..> BovineRegistrationData : factory reads
 ```
 
-`BovineRegistrationData` é parâmetro da factory, **não** campo retido nem entidade persistente. As setas para `BovineId` representam campos de valor, não relacionamentos navegáveis com objetos `Bovine`. `Bovine` oferece accessors públicos de leitura, mas não possui transições públicas de estado nem factory de reconstituição.
+`BovineRegistrationData` é parâmetro da factory, **não** entidade persistente. `Bovine` retém `BovineOrigin`, tem accessors e factory `reconstitute` que preserva os dados reconstruídos do JPA; não possui transições públicas de estado. As setas para `BovineId` representam valores, não relacionamentos navegáveis com objetos `Bovine`.
 
 ### A3. Caso de uso e adapters de fazenda
 
@@ -208,147 +208,106 @@ classDiagram
     FarmConfig ..> CreateFarmUseCase : exposes transaction wrapper
 ```
 
-`FarmResponse` está desenhado por existir no código, mas não está ligado ao controller: nenhuma consulta foi implementada. `FarmWebExceptionHandler` e `OpenApiConfig` são componentes Web existentes sem associação de domínio.
+`FindFarmController` usa `FarmResponse` e o fluxo de consulta está implementado localmente. A política de exposição/autorização do GET ainda aguarda revisão.
 
-### A4. Caso de uso bovino — Application
+### A4. Application: cadastro operacional e consultas
 
 ```mermaid
 classDiagram
-    class CreateBovineUseCase {
+    class CreateBovineWithInitialOwnershipUseCase {
         <<interface>>
-        +create(CreateBovineCommand) BovineId
+        +create(CreateBovineWithInitialOwnershipCommand) BovineId
     }
-    class CreateBovineCommand {
+    class CreateBovineWithInitialOwnershipService {
+        +create(CreateBovineWithInitialOwnershipCommand) BovineId
+    }
+    class CreateBovineWithInitialOwnershipCommand {
         <<record>>
-        +String name
-        +String internalCode
-        +BovineSex sex
-        +String breed
-        +String coatColor
-        +LocalDate birthDate
-        +BovineStatus status
-        +String earTag
-        +String registrationNumber
-        +String registrationAssociation
-        +BovineRegistrationCategory registrationCategory
-        +BovineId fatherId
-        +BovineId motherId
-        +String fatherRegistrationNumber
-        +String motherRegistrationNumber
+        +CreateBovineCommand bovineData
+        +FarmId farmId
     }
-    class CreateBovineService {
-        -BovineIdGenerationPort bovineIdGenerationPort
-        -SaveBovinePort saveBovinePort
-        -Clock clock
-        +create(CreateBovineCommand) BovineId
-    }
-    class BovineIdGenerationPort {
+    class FindBovineByIdUseCase {
         <<interface>>
-        +nextId() BovineId
+        +findById(BovineId) Bovine
     }
-    class SaveBovinePort {
+    class FindFarmByIdUseCase {
         <<interface>>
-        +save(Bovine) void
+        +findById(FarmId) Farm
     }
-    CreateBovineService ..|> CreateBovineUseCase
-    CreateBovineService --> BovineIdGenerationPort : calls
-    CreateBovineService --> SaveBovinePort : calls
-    CreateBovineService ..> BovineRegistrationData : maps command
-    CreateBovineService ..> Bovine : creates
+    class BovineConfig {
+        +createBovineWithInitialOwnershipUseCase(...) UseCase
+        +findBovineByIdUseCase(...) FindBovineByIdUseCase
+    }
+    class FarmConfig {
+        +findFarmByIdUseCase(...) FindFarmByIdUseCase
+        +transactionTemplate(...) TransactionTemplate
+    }
+    CreateBovineWithInitialOwnershipService ..|> CreateBovineWithInitialOwnershipUseCase
+    BovineConfig ..> CreateBovineWithInitialOwnershipService : composes in TransactionTemplate
+    BovineConfig ..> FindBovineByIdUseCase : composes
+    FarmConfig ..> FindFarmByIdUseCase : composes
+    CreateBovineWithInitialOwnershipService --> FindFarmPort : validates farm
+    CreateBovineWithInitialOwnershipService --> BovineIdGenerationPort
+    CreateBovineWithInitialOwnershipService --> BovineOwnershipPeriodIdGenerationPort
+    CreateBovineWithInitialOwnershipService --> SaveBovinePort
+    CreateBovineWithInitialOwnershipService --> SaveBovineOwnershipPeriodPort
+    FindBovineByIdUseCase --> FindBovinePort
+    FindFarmByIdUseCase --> FindFarmPort
 ```
 
-O diagrama mostra o limite Application. A composição transacional, os adapters JPA e o adapter Web estão no diagrama A5.
+O serviço rejeita fazenda ausente/inativa antes de gerar IDs e cria `Bovine` e o primeiro período com o mesmo instante do `Clock`. A composição Spring envolve as duas gravações em uma transação externa.
 
-### A5. Fluxo Web e persistência técnica de bovino (perfil dev)
+### A5. Web, queries and persistence (local implementation)
 
 ```mermaid
 classDiagram
     class CreateBovineController {
-        -CreateBovineUseCase useCase
         +create(BovineRequest) ResponseEntity
     }
-    class BovineRequest {
-        <<record>>
-        +String name
-        +String internalCode
-        +BovineSex sex
-        +String breed
-        +String coatColor
-        +LocalDate birthDate
-        +BovineStatus status
-        +String earTag
-        +String registrationNumber
-        +String registrationAssociation
-        +BovineRegistrationCategory registrationCategory
-        +Long fatherId
-        +Long motherId
-        +String fatherRegistrationNumber
-        +String motherRegistrationNumber
+    class FindBovineController {
+        +findById(Long) ResponseEntity
+    }
+    class FindFarmController {
+        +findById(Long) ResponseEntity
     }
     class BovineWebMapper {
-        +toCommand(BovineRequest) CreateBovineCommand
+        +toOperationalCommand(BovineRequest) CreateBovineWithInitialOwnershipCommand
+        +toResponse(Bovine) BovineResponse
     }
-    class CreateBovineResponse {
-        <<record>>
-        +Long id
-    }
-    class CreateBovineUseCase {
-        <<interface>>
-        +create(CreateBovineCommand) BovineId
-    }
-    class BovineConfig {
-        +createBovineUseCase(...) CreateBovineUseCase
-    }
-    class CreateBovineService {
-        +create(CreateBovineCommand) BovineId
-    }
-    class BovineIdGenerationPort {
-        <<interface>>
-        +nextId() BovineId
-    }
-    class SaveBovinePort {
-        <<interface>>
-        +save(Bovine) void
-    }
-    class JpaBovineIdGenerationAdapter {
-        +nextId() BovineId
-    }
-    class JpaSaveBovineAdapter {
-        +save(Bovine) void
-    }
+    class FindBovineControllerHttpTest
+    class FindFarmControllerHttpTest
     class BovineJpaMapper {
         +toEntity(Bovine) BovineJpaEntity
+        +toDomain(BovineJpaEntity) Bovine
     }
-    class BovineJpaEntity {
-        -Long id
-        -String internalCode
-        -String name
-        -BovineSex sex
-        -BovineStatus status
-        -Instant createdAt
-        -Instant updatedAt
+    class FarmJpaMapper {
+        +toEntity(Farm) FarmJpaEntity
+        +toDomain(FarmJpaEntity) Farm
     }
-    CreateBovineController --> CreateBovineUseCase : calls
-    CreateBovineController ..> BovineRequest : receives
-    CreateBovineController ..> BovineWebMapper : calls
-    CreateBovineController ..> CreateBovineResponse : returns
-    BovineWebMapper ..> CreateBovineCommand : creates
-    BovineConfig ..> CreateBovineService : constructs
-    BovineConfig ..> CreateBovineUseCase : exposes TransactionTemplate wrapper
-    CreateBovineService ..|> CreateBovineUseCase
-    CreateBovineService --> BovineIdGenerationPort : calls
-    CreateBovineService --> SaveBovinePort : calls
-    JpaBovineIdGenerationAdapter ..|> BovineIdGenerationPort
-    JpaSaveBovineAdapter ..|> SaveBovinePort
-    JpaSaveBovineAdapter ..> BovineJpaMapper : calls
-    BovineJpaMapper ..> BovineJpaEntity : creates
+    class BovineOwnershipPeriodJpaMapper {
+        +toEntity(BovineOwnershipPeriod) Entity
+        +toDomain(Entity) BovineOwnershipPeriod
+    }
+    class BovineOwnershipPeriodJpaEntity
+    class V5
+    class V6
+    CreateBovineController --> CreateBovineWithInitialOwnershipUseCase
+    CreateBovineController ..> BovineWebMapper
+    FindBovineController --> FindBovineByIdUseCase
+    FindBovineController ..> BovineWebMapper
+    FindFarmController --> FindFarmByIdUseCase
+    BovineJpaMapper ..> BovineJpaEntity
+    FarmJpaMapper ..> FarmJpaEntity
+    BovineOwnershipPeriodJpaMapper ..> BovineOwnershipPeriodJpaEntity
+    V5 ..> BovineOwnershipPeriodJpaEntity : schema
+    V6 ..> BovineOwnershipPeriodJpaEntity : one open period index
 ```
 
-`CreateBovineController` só existe no contexto `dev` quando a feature flag está habilitada; o bind dev usa loopback. A relação com JPA termina em `BovineJpaEntity`, sem referência direta à fazenda. Não há titularidade inicial ou autorização operacional nesse fluxo.
+O POST `/api/v1/bovines` é registrado somente em `dev` com sua feature flag. Os controllers GET não têm guard de profile/flag/autenticação; exposição e autorização seguem pendentes de revisão separada. Domain e Application permanecem independentes de Spring/JPA/HTTP.
 
 ## B. Modelo conceitual futuro — PROPOSED
 
-Os tipos `BovineOwnershipPeriod` e `BovineOwnershipPeriodId` já existem no Domain; os demais conceitos abaixo são candidatos. Cardinalidades descrevem hipóteses para discussão; associações não definem automaticamente cascata JPA, persistência ou transação. O `BovineId` continua estável e os vínculos referenciam IDs técnicos.
+`BovineOwnershipPeriod` e `BovineOwnershipPeriodId` são implementados localmente no Domain e na persistência V5/V6. Os demais conceitos abaixo são candidatos. Cardinalidades descrevem hipóteses; associações não definem automaticamente cascata JPA ou transação. `BovineId` permanece estável.
 
 ### B1. Titularidade e pessoas
 
@@ -363,7 +322,7 @@ classDiagram
         +BovineId id
     }
     class BovineOwnershipPeriod {
-        <<EXISTING_DOMAIN>>
+        <<EXISTING_DOMAIN_PERSISTED>>
         +BovineOwnershipPeriodId id
         +BovineId bovineId
         +FarmId farmId
@@ -399,7 +358,7 @@ classDiagram
     OwnershipTransfer ..> BovineOwnershipPeriod : may link periods
 ```
 
-`BovineOwnershipPeriod` e `BovineOwnershipPeriodId` são tipos existentes somente no Domain; não há entity JPA, tabela, geração persistente do ID ou caso de uso operacional. `OwnerParty`, `UserAccount` e seus vínculos ainda não têm identidade, campos ou cardinalidade final definidos. Por isso, `OwnerParty` aparece sem associação: decidir se proprietário é usuário, pessoa distinta ou papel no vínculo. `OwnershipTransfer` pode ser desnecessário se os períodos e a auditoria forem suficientes. O período referencia `BovineId` e `FarmId`, sem composição com `Bovine` ou `Farm`; uma transferência candidata atualiza períodos em uma transação.
+`BovineOwnershipPeriod` e `BovineOwnershipPeriodId` existem no Domain e no mapeamento/persistência local: V5 cria a tabela e sequence, e V6 limita períodos abertos. O fluxo de cadastro abre o período inicial; leitura da timeline e transferência não existem. `OwnerParty`, `UserAccount` e seus vínculos continuam sem identidade, campos ou cardinalidade final definidos. `OwnershipTransfer` pode ser desnecessário se períodos e auditoria forem suficientes. O período referencia `BovineId` e `FarmId`, sem navegação direta entre agregados.
 
 ### B2. Reprodução
 

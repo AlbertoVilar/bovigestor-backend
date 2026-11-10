@@ -20,7 +20,8 @@ public class Farm {
             String codeSeries,
             ZoneId timeZone,
             FarmStatus status,
-            Instant createdAt
+            Instant createdAt,
+            Instant updatedAt
     ) {
         this.id = Objects.requireNonNull(id, "O identificador da fazenda é obrigatório");
         this.name = validateName(name);
@@ -31,7 +32,13 @@ public class Farm {
         );
         this.status = Objects.requireNonNull(status, "O status da fazenda é obrigatório");
         this.createdAt = Objects.requireNonNull(createdAt, "A data de criação é obrigatória");
-        this.updatedAt = createdAt;
+        this.updatedAt = Objects.requireNonNull(updatedAt, "A data de atualização é obrigatória");
+
+        if (updatedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException(
+                    "A data de atualização não pode ser anterior à criação"
+            );
+        }
     }
 
     public static Farm create(
@@ -41,7 +48,28 @@ public class Farm {
             ZoneId timeZone,
             Instant createdAt
     ) {
-        return new Farm(id, name, codeSeries, timeZone, FarmStatus.ACTIVE, createdAt);
+        return new Farm(id, name, codeSeries, timeZone, FarmStatus.ACTIVE, createdAt, createdAt);
+    }
+
+    public static Farm reconstitute(
+            FarmId id,
+            String name,
+            String codeSeries,
+            ZoneId timeZone,
+            FarmStatus status,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+
+        return new Farm(
+                id,
+                name,
+                codeSeries,
+                timeZone,
+                status,
+                createdAt,
+                updatedAt
+        );
     }
 
     public void activate(Instant occurredAt) {

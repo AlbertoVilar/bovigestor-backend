@@ -52,7 +52,7 @@ class FarmTimeZoneMigrationIntegrationTest {
 
         assertThat(flyway(null).info().applied())
                 .extracting(info -> info.getVersion().getVersion())
-                .containsExactly("1", "2", "3", "4");
+                .containsExactly("1", "2", "3", "4", "5", "6");
     }
 
     private static Flyway flyway(String target) {

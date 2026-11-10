@@ -100,6 +100,74 @@ class BovineOwnershipPeriodTest {
     }
 
     @Test
+    void shouldReconstituteClosedOwnershipPeriodPreservingAllValues() {
+        // Arrange
+        BovineOwnershipPeriodId id = new BovineOwnershipPeriodId(42L);
+        BovineId bovineId = new BovineId(7L);
+        FarmId farmId = new FarmId(3L);
+        Instant startedAt = Instant.parse("2026-06-01T12:00:00Z");
+        Instant endedAt = Instant.parse("2026-06-15T12:00:00Z");
+
+        // Act
+        BovineOwnershipPeriod period = BovineOwnershipPeriod.reconstitute(
+                id, bovineId, farmId, startedAt, endedAt
+        );
+
+        // Assert
+        assertThat(period)
+                .extracting(
+                        BovineOwnershipPeriod::id,
+                        BovineOwnershipPeriod::bovineId,
+                        BovineOwnershipPeriod::farmId,
+                        BovineOwnershipPeriod::startedAt,
+                        BovineOwnershipPeriod::endedAt
+                )
+                .containsExactly(id, bovineId, farmId, startedAt, endedAt);
+    }
+
+    @Test
+    void shouldReconstituteOpenOwnershipPeriodWithNullEnd() {
+        // Arrange
+        BovineOwnershipPeriodId id = new BovineOwnershipPeriodId(43L);
+        BovineId bovineId = new BovineId(8L);
+        FarmId farmId = new FarmId(4L);
+        Instant startedAt = Instant.parse("2026-07-01T09:30:00Z");
+
+        // Act
+        BovineOwnershipPeriod period = BovineOwnershipPeriod.reconstitute(
+                id, bovineId, farmId, startedAt, null
+        );
+
+        // Assert
+        assertThat(period)
+                .extracting(
+                        BovineOwnershipPeriod::id,
+                        BovineOwnershipPeriod::bovineId,
+                        BovineOwnershipPeriod::farmId,
+                        BovineOwnershipPeriod::startedAt,
+                        BovineOwnershipPeriod::endedAt
+                )
+                .containsExactly(id, bovineId, farmId, startedAt, null);
+    }
+
+    @Test
+    void shouldRejectReconstitutedPeriodEndingBeforeStart() {
+        // Arrange
+        BovineOwnershipPeriodId id = new BovineOwnershipPeriodId(44L);
+        BovineId bovineId = new BovineId(9L);
+        FarmId farmId = new FarmId(5L);
+        Instant startedAt = Instant.parse("2026-06-02T00:00:00Z");
+        Instant endedAt = Instant.parse("2026-06-01T23:59:59Z");
+
+        // Act & Assert
+        assertThatThrownBy(() -> BovineOwnershipPeriod.reconstitute(
+                id, bovineId, farmId, startedAt, endedAt
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("O fim do período deve ser posterior ao início");
+    }
+
+    @Test
     void shouldRejectNullBovineId() {
         // Arrange
         BovineOwnershipPeriodId id = new BovineOwnershipPeriodId(1L);

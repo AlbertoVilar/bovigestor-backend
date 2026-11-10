@@ -1,10 +1,14 @@
 package com.bovigestor.adapter.in.web.mapper;
 
 import com.bovigestor.adapter.in.web.dto.BovineRequest;
+import com.bovigestor.adapter.in.web.dto.BovineResponse;
 import com.bovigestor.application.port.in.CreateBovineCommand;
+import com.bovigestor.domain.model.Bovine;
 import com.bovigestor.domain.model.BovineId;
+import com.bovigestor.domain.model.BovineInternalCode;
 import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.BovineRegistrationCategory;
+import com.bovigestor.domain.model.BovineRegistrationData;
 import com.bovigestor.domain.model.BovineSex;
 import com.bovigestor.domain.model.BovineStatus;
 import com.bovigestor.domain.model.FarmId;
@@ -13,11 +17,147 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDate;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BovineWebMapperTest {
+
+    @Test
+    void shouldMapCompleteBovineToResponsePreservingIdsReferencesAndTimestamps() {
+        Instant createdAt = Instant.parse("2026-06-01T12:00:00Z");
+        Instant updatedAt = Instant.parse("2026-06-03T15:30:00Z");
+        Bovine bovine = Bovine.reconstitute(
+                new BovineId(123L),
+                new BovineInternalCode("BVL-26-985731"),
+                new BovineRegistrationData(
+                        "Mimosa",
+                        BovineSex.FEMALE,
+                        "Nelore",
+                        "Branca",
+                        LocalDate.of(2024, 5, 12),
+                        BovineStatus.ACTIVE,
+                        "BRINCO-985731",
+                        "REG-2024-985731",
+                        "ABC",
+                        BovineRegistrationCategory.PO,
+                        new BovineId(120L),
+                        null,
+                        "EXT-F-985731",
+                        "EXT-M-985731"
+                ),
+                createdAt,
+                updatedAt,
+                new BovineOrigin("Ana Silva", "Fazenda Boa Vista", new FarmId(15L))
+        );
+
+        BovineResponse response = BovineWebMapper.toResponse(bovine);
+
+        assertThat(response).isEqualTo(new BovineResponse(
+                123L,
+                "BVL-26-985731",
+                "Mimosa",
+                "FEMALE",
+                "Nelore",
+                "Branca",
+                LocalDate.of(2024, 5, 12),
+                "ACTIVE",
+                "BRINCO-985731",
+                "REG-2024-985731",
+                "ABC",
+                "PO",
+                120L,
+                null,
+                "EXT-F-985731",
+                "EXT-M-985731",
+                createdAt,
+                updatedAt,
+                new BovineResponse.OriginResponse(
+                        "Ana Silva",
+                        "Fazenda Boa Vista",
+                        15L
+                )
+        ));
+    }
+
+    @Test
+    void shouldMapExternalParentReferencesWithoutLocalParentIdsToResponse() {
+        Instant timestamp = Instant.parse("2026-06-01T12:00:00Z");
+        Bovine bovine = Bovine.createManually(
+                new BovineId(124L),
+                new BovineInternalCode("BVL-26-985732"),
+                new BovineRegistrationData(
+                        "Estrela",
+                        BovineSex.FEMALE,
+                        null,
+                        null,
+                        null,
+                        BovineStatus.ACTIVE,
+                        null,
+                        "REG-2024-985732",
+                        "ABC",
+                        BovineRegistrationCategory.PO,
+                        null,
+                        null,
+                        "EXT-F-985732",
+                        "EXT-M-985732"
+                ),
+                timestamp,
+                new BovineOrigin("Criador externo", "Fazenda de origem", null)
+        );
+
+        BovineResponse response = BovineWebMapper.toResponse(bovine);
+
+        assertThat(response.fatherId()).isNull();
+        assertThat(response.motherId()).isNull();
+        assertThat(response.fatherRegistrationNumber()).isEqualTo("EXT-F-985732");
+        assertThat(response.motherRegistrationNumber()).isEqualTo("EXT-M-985732");
+        assertThat(response.origin().originFarmId()).isNull();
+    }
+
+    @Test
+    void shouldPreserveNullOptionalFieldsInResponse() {
+        Instant timestamp = Instant.parse("2026-06-01T12:00:00Z");
+        Bovine bovine = Bovine.createManually(
+                new BovineId(125L),
+                new BovineInternalCode("BVL-26-985733"),
+                new BovineRegistrationData(
+                        "Novilha",
+                        BovineSex.FEMALE,
+                        null,
+                        null,
+                        null,
+                        BovineStatus.ACTIVE,
+                        null,
+                        null,
+                        null,
+                        BovineRegistrationCategory.UNREGISTERED,
+                        null,
+                        null,
+                        null,
+                        null
+                ),
+                timestamp,
+                new BovineOrigin("Criador de teste", "Fazenda de teste", null)
+        );
+
+        BovineResponse response = BovineWebMapper.toResponse(bovine);
+
+        assertThat(response.breed()).isNull();
+        assertThat(response.coatColor()).isNull();
+        assertThat(response.birthDate()).isNull();
+        assertThat(response.earTag()).isNull();
+        assertThat(response.registrationNumber()).isNull();
+        assertThat(response.registrationAssociation()).isNull();
+        assertThat(response.fatherId()).isNull();
+        assertThat(response.motherId()).isNull();
+        assertThat(response.fatherRegistrationNumber()).isNull();
+        assertThat(response.motherRegistrationNumber()).isNull();
+        assertThat(response.origin().originFarmId()).isNull();
+        assertThat(response.createdAt()).isEqualTo(timestamp);
+        assertThat(response.updatedAt()).isEqualTo(timestamp);
+    }
 
     @Test
     void shouldMapEveryRequestFieldToApplicationCommand() {
@@ -37,7 +177,7 @@ class BovineWebMapperTest {
                 121L,
                 null,
                 null,
-                new BovineRequest.OriginRequest("Ana Silva", "Fazenda Boa Vista", 15L)
+                new BovineRequest.OriginRequest("Ana Silva", "Fazenda Boa Vista", 15L), 15L
         );
 
         CreateBovineCommand command = BovineWebMapper.toCommand(request);
@@ -80,7 +220,7 @@ class BovineWebMapperTest {
                 null,
                 "EXT-F-985732",
                 "EXT-M-985732",
-                new BovineRequest.OriginRequest("José Pereira", "Fazenda Santa Rita", null)
+                new BovineRequest.OriginRequest("José Pereira", "Fazenda Santa Rita", null), 15L
         );
 
         CreateBovineCommand command = BovineWebMapper.toCommand(request);
@@ -123,7 +263,7 @@ class BovineWebMapperTest {
                 null,
                 null,
                 null,
-                null
+                null, 15L
         );
 
         assertThatThrownBy(() -> BovineWebMapper.toCommand(request))
@@ -168,7 +308,7 @@ class BovineWebMapperTest {
                 motherId,
                 null,
                 null,
-                new BovineRequest.OriginRequest("Criador teste", "Fazenda teste", null)
+                new BovineRequest.OriginRequest("Criador teste", "Fazenda teste", null), 15L
         );
     }
 }

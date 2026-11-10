@@ -1,7 +1,10 @@
 package com.bovigestor.adapter.in.web.mapper;
 
 import com.bovigestor.adapter.in.web.dto.BovineRequest;
+import com.bovigestor.adapter.in.web.dto.BovineResponse;
 import com.bovigestor.application.port.in.CreateBovineCommand;
+import com.bovigestor.application.port.in.CreateBovineWithInitialOwnershipCommand;
+import com.bovigestor.domain.model.Bovine;
 import com.bovigestor.domain.model.BovineId;
 import com.bovigestor.domain.model.BovineOrigin;
 import com.bovigestor.domain.model.FarmId;
@@ -33,6 +36,45 @@ public final class BovineWebMapper {
                 request.fatherRegistrationNumber(),
                 request.motherRegistrationNumber(),
                 toBovineOrigin(request.origin())
+        );
+    }
+
+    public static CreateBovineWithInitialOwnershipCommand toOperationalCommand(BovineRequest request) {
+        Objects.requireNonNull(request, "A solicitação de criação do bovino é obrigatória");
+        return new CreateBovineWithInitialOwnershipCommand(
+                toCommand(request), new FarmId(request.farmId())
+        );
+    }
+
+    public static BovineResponse toResponse(Bovine bovine) {
+        Objects.requireNonNull(bovine, "O bovino é obrigatório");
+
+        return new BovineResponse(
+                bovine.id().value(),
+                bovine.internalCode().value(),
+                bovine.name(),
+                bovine.sex().name(),
+                bovine.breed(),
+                bovine.coatColor(),
+                bovine.birthDate(),
+                bovine.status().name(),
+                bovine.earTag(),
+                bovine.registrationNumber(),
+                bovine.registrationAssociation(),
+                bovine.registrationCategory().name(),
+                bovine.fatherId() == null ? null : bovine.fatherId().value(),
+                bovine.motherId() == null ? null : bovine.motherId().value(),
+                bovine.fatherRegistrationNumber(),
+                bovine.motherRegistrationNumber(),
+                bovine.createdAt(),
+                bovine.updatedAt(),
+                new BovineResponse.OriginResponse(
+                        bovine.origin().creatorName(),
+                        bovine.origin().originFarmName(),
+                        bovine.origin().originFarmId() == null
+                                ? null
+                                : bovine.origin().originFarmId().value()
+                )
         );
     }
 
