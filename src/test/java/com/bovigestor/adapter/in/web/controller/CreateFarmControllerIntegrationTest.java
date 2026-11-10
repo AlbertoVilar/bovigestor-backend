@@ -1,5 +1,6 @@
 package com.bovigestor.adapter.in.web.controller;
 
+import com.bovigestor.testconfig.ClassIsolatedPostgres;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -27,6 +30,11 @@ class CreateFarmControllerIntegrationTest {
 
     private static final String FARMS_ENDPOINT = "/api/v1/farms";
 
+    @DynamicPropertySource
+    static void configureClassIsolatedPostgres(DynamicPropertyRegistry registry) {
+        ClassIsolatedPostgres.register(CreateFarmControllerIntegrationTest.class, registry);
+    }
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -35,7 +43,7 @@ class CreateFarmControllerIntegrationTest {
 
     @BeforeEach
     void clearFarmData() {
-        jdbcTemplate.update("DELETE FROM farm");
+        jdbcTemplate.execute("TRUNCATE TABLE bovine_ownership_period, bovine, farm RESTART IDENTITY CASCADE");
     }
 
     @Test

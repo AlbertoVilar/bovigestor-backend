@@ -1,5 +1,6 @@
 package com.bovigestor.adapter.out.persistence;
 
+import com.bovigestor.testconfig.ClassIsolatedPostgres;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,6 +8,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 import java.util.Arrays;
 
@@ -16,6 +19,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest
 @ActiveProfiles("test")
 class BovineOwnershipPeriodMigrationTest {
+
+    @DynamicPropertySource
+    static void configureClassIsolatedPostgres(DynamicPropertyRegistry registry) {
+        ClassIsolatedPostgres.register(BovineOwnershipPeriodMigrationTest.class, registry);
+    }
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
